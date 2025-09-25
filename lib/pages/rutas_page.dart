@@ -8,22 +8,44 @@ class RutasPage extends StatefulWidget {
 }
 
 class _RutasPageState extends State<RutasPage> {
-  // ---- Datos de ejemplo (4 direcciones) ----
-  final List<Ruta> _todas = List.generate(
-    4,
-    (i) => Ruta(
-      id: i + 1,
-      cliente: 'Juanito Perez',
+  final List<Ruta> _todas = <Ruta>[
+    Ruta(
+      id: 1,
+      cliente: 'Juanito Perez Ruvalcaba',
       contrato: '123123-3',
-      direccion: 'Calle: Juan Bernardino #435 Col. El comal En. Tepatitlán, Jalisco.',
-      orden: 'Cambio de Modem.',
-      estatus: i == 0
-          ? RutaStatus.pendiente
-          : i == 1
-              ? RutaStatus.enProceso
-              : RutaStatus.completada,
+      direccion: 'Calle Juan Bernardino #435, Col. El Comal, Tepatitlán, Jalisco.',
+      orden: 'Cambio de módem.',
+      estatus: RutaStatus.pendiente,
     ),
-  );
+    Ruta(
+      id: 2,
+      cliente: 'Adriana Esmeralda Rodríguez Muñóz',
+      contrato: '456789-1',
+      direccion: 'Av. Ricardo Alcalá #120, Col. Centro, Tepatitlán, Jalisco.',
+      orden: 'Instalación de TV digital.',
+      estatus: RutaStatus.enProceso,
+    ),
+    Ruta(
+      id: 3,
+      cliente: 'Homero Simpson Springfield',
+      contrato: '987654-2',
+      direccion: 'Calle Hidalgo #78, Fracc. San José, Tepatitlán, Jalisco.',
+      orden: 'Reconexión de servicio.',
+      estatus: RutaStatus.completada,
+      fechaHoraInicio: DateTime(2025, 9, 18, 15, 10), // INICIO
+      fechaHoraFin: DateTime(2025, 9, 18, 16, 30),    // TERMINACIÓN
+    ),
+    Ruta(
+      id: 4,
+      cliente: 'Cósimo Juárez Travaldaba',
+      contrato: '741258-9',
+      direccion: 'Priv. Los Pinos #34, Col. San Gabriel, Tepatitlán, Jalisco.',
+      orden: 'Retiro de equipo.',
+      estatus: RutaStatus.completada,
+      fechaHoraInicio: DateTime(2025, 9, 19, 10, 20), // INICIO
+      fechaHoraFin: DateTime(2025, 9, 19, 11, 15),    // TERMINACIÓN
+    ),
+  ];
 
   // ---- Estado de UI ----
   final Set<RutaStatus> _filtros = {}; // vacío = mostrar todos
@@ -44,7 +66,7 @@ class _RutasPageState extends State<RutasPage> {
           r.direccion.toLowerCase().contains(q) ||
           r.orden.toLowerCase().contains(q));
     }
-    // (Opcional) Ordena mostrando primero pendientes, luego en proceso, luego completadas
+    // Pendiente -> En proceso -> Completada
     final list = base.toList();
     list.sort((a, b) => a.estatus.index.compareTo(b.estatus.index));
     return list;
@@ -139,9 +161,7 @@ class _RutasPageState extends State<RutasPage> {
                     ),
                   ),
                   child: ListTile(
-                    leading: CircleAvatar(
-                      child: Text('${r.id}'),
-                    ),
+                    leading: CircleAvatar(child: Text('${r.id}')),
                     title: Row(
                       children: [
                         Expanded(
@@ -161,6 +181,22 @@ class _RutasPageState extends State<RutasPage> {
                           _line('Número de contrato', r.contrato),
                           _line('Dirección', r.direccion),
                           _line('Orden', r.orden),
+
+                          // SOLO EN COMPLETADAS: mostrar Inicio y Terminación (en ese orden)
+                          if (r.estatus == RutaStatus.completada && r.fechaHoraInicio != null)
+                            _pill(
+                              label: 'Inicio',
+                              value: _formatFechaHora(r.fechaHoraInicio!),
+                              bg: const Color.fromARGB(255, 158, 203, 151),
+                              fg: const Color.fromARGB(255, 8, 81, 16),
+                            ),
+                          if (r.estatus == RutaStatus.completada && r.fechaHoraFin != null)
+                            _pill(
+                              label: 'Terminación',
+                              value: _formatFechaHora(r.fechaHoraFin!),
+                              bg: Colors.red.shade100,
+                              fg: Colors.red,
+                            ),
                         ],
                       ),
                     ),
@@ -189,6 +225,38 @@ class _RutasPageState extends State<RutasPage> {
         ],
       ),
     );
+  }
+
+  // Etiqueta redondeada reutilizable (Inicio / Terminación)
+  static Widget _pill({
+    required String label,
+    required String value,
+    required Color bg,
+    required Color fg,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          '$label: $value',
+          style: TextStyle(
+            color: fg,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _formatFechaHora(DateTime dt) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(dt.day)}/${two(dt.month)}/${dt.year} ${two(dt.hour)}:${two(dt.minute)}';
+    // Si prefieres formato 12h con am/pm, dime y lo cambio.
   }
 
   static Widget _line(String label, String value) {
@@ -251,6 +319,8 @@ class Ruta {
   final String direccion;
   final String orden;
   final RutaStatus estatus;
+  final DateTime? fechaHoraInicio;
+  final DateTime? fechaHoraFin;
 
   Ruta({
     required this.id,
@@ -259,6 +329,8 @@ class Ruta {
     required this.direccion,
     required this.orden,
     required this.estatus,
+    this.fechaHoraInicio,
+    this.fechaHoraFin,
   });
 }
 
