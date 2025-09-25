@@ -1,4 +1,9 @@
+// lib/pages/rutas_page.dart
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart' as gc;
+import 'package:latlong2/latlong.dart' show LatLng;
+import '../state/destination_state.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class RutasPage extends StatefulWidget {
   const RutasPage({super.key});
@@ -150,8 +155,8 @@ class _RutasPageState extends State<RutasPage> {
                   margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
                   decoration: BoxDecoration(
                     color: r.estatus == RutaStatus.completada
-                        ? Colors.green.shade100 // fondo verde para completadas
-                        : Colors.white,         // blanco para las demás
+                        ? Colors.green.shade100
+                        : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       width: isSelected ? 2.2 : 1,
@@ -201,18 +206,12 @@ class _RutasPageState extends State<RutasPage> {
                         : const Icon(Icons.chevron_right),
                     isThreeLine: true,
                     onTap: r.estatus == RutaStatus.completada
-                        ? null // no se puede seleccionar si ya está completada
+                        ? null
                         : () async {
                             final confirmar = await _confirmarSeleccion(context);
                             if (confirmar == true) {
                               setState(() => _seleccionId = r.id);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Ruta ${r.id} seleccionada'),
-                                  behavior: SnackBarBehavior.floating,
-                                  duration: const Duration(milliseconds: 1200),
-                                ),
-                              );
+                              await _geocodificarYEnviar(r); // 👈 NUEVO
                             }
                           },
                   ),
@@ -223,6 +222,78 @@ class _RutasPageState extends State<RutasPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _geocodificarYEnviar(Ruta r) async {
+    if (kIsWeb) {
+      // Fallback de demo para web
+      final demoTable = <String, LatLng>{
+        'José Clemente Orozco 267, La Gloria, 47670 Tepatitlán de Morelos, Jal.': const LatLng(20.8179, -102.7615),
+        'C. J. Cruz Ramírez 545-531, San Antonio El Alto, 47640 Tepatitlán de Morelos, Jal.': const LatLng(20.8125, -102.7468),
+        'C. J. Luis Velazco 159-129, Cerrito de La Cruz, 47610 Tepatitlán de Morelos, Jal.': const LatLng(20.8098, -102.7442),
+        'Quirino Navarro 408-452, Santa Monica, 47634 Tepatitlán de Morelos, Jal.': const LatLng(20.8141, -102.7537),
+      };
+
+      final latLng = demoTable[r.direccion] ?? const LatLng(20.8169, -102.7635);
+
+      DestinationState.instance.set(latLng);
+
+      if (!mounted) return;
+
+      // 👇 Muestra el aviso ANTES de navegar
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Demo web: destino fijado para "${r.cliente}"')),
+      );
+
+      // 👇 SOLO un pop para volver a Home
+      Navigator.of(context).pop();
+      return;
+    }
+
+    // Pequeño loader modal sin cambiar tu layout
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final list = await gc.locationFromAddress(r.direccion);
+      if (list.isEmpty) {
+        Navigator.of(context, rootNavigator: true).pop(); // cierra loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo geocodificar la dirección')),
+        );
+        return;
+      }
+
+      final loc = list.first;
+      final latLng = LatLng(loc.latitude, loc.longitude);
+
+      // Publicar destino para HomePage (mover cámara y marcador)
+      DestinationState.instance.set(latLng);
+
+      Navigator.of(context).pop(); // cierra loader
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ruta ${r.id} seleccionada'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 1200),
+        ),
+      );
+
+      // Opcional: regresar a Home al terminar
+      Navigator.of(context).pop();
+    } catch (e) {
+      Navigator.of(context).pop(); // cierra loader
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error de geocodificación: $e')),
+      );
+    }
   }
 
   static Widget _pill({
