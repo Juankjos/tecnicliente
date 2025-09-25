@@ -13,7 +13,7 @@ class _RutasPageState extends State<RutasPage> {
       id: 1,
       cliente: 'Juanito Perez Ruvalcaba',
       contrato: '123123-3',
-      direccion: 'Calle Juan Bernardino #435, Col. El Comal, Tepatitlán, Jalisco.',
+      direccion: 'José Clemente Orozco 267, La Gloria, 47670 Tepatitlán de Morelos, Jal.',
       orden: 'Cambio de módem.',
       estatus: RutaStatus.pendiente,
     ),
@@ -21,7 +21,7 @@ class _RutasPageState extends State<RutasPage> {
       id: 2,
       cliente: 'Adriana Esmeralda Rodríguez Muñóz',
       contrato: '456789-1',
-      direccion: 'Av. Ricardo Alcalá #120, Col. Centro, Tepatitlán, Jalisco.',
+      direccion: 'C. J. Cruz Ramírez 545-531, San Antonio El Alto, 47640 Tepatitlán de Morelos, Jal.',
       orden: 'Instalación de TV digital.',
       estatus: RutaStatus.enProceso,
     ),
@@ -29,30 +29,28 @@ class _RutasPageState extends State<RutasPage> {
       id: 3,
       cliente: 'Homero Simpson Springfield',
       contrato: '987654-2',
-      direccion: 'Calle Hidalgo #78, Fracc. San José, Tepatitlán, Jalisco.',
+      direccion: 'C. J. Luis Velazco 159-129, Cerrito de La Cruz, 47610 Tepatitlán de Morelos, Jal.',
       orden: 'Reconexión de servicio.',
       estatus: RutaStatus.completada,
-      fechaHoraInicio: DateTime(2025, 9, 18, 15, 10), // INICIO
-      fechaHoraFin: DateTime(2025, 9, 18, 16, 30),    // TERMINACIÓN
+      fechaHoraInicio: DateTime(2025, 9, 18, 15, 10),
+      fechaHoraFin: DateTime(2025, 9, 18, 16, 30),
     ),
     Ruta(
       id: 4,
       cliente: 'Cósimo Juárez Travaldaba',
       contrato: '741258-9',
-      direccion: 'Priv. Los Pinos #34, Col. San Gabriel, Tepatitlán, Jalisco.',
+      direccion: 'Quirino Navarro 408-452, Santa Monica, 47634 Tepatitlán de Morelos, Jal.',
       orden: 'Retiro de equipo.',
       estatus: RutaStatus.completada,
-      fechaHoraInicio: DateTime(2025, 9, 19, 10, 20), // INICIO
-      fechaHoraFin: DateTime(2025, 9, 19, 11, 15),    // TERMINACIÓN
+      fechaHoraInicio: DateTime(2025, 9, 19, 10, 20),
+      fechaHoraFin: DateTime(2025, 9, 19, 11, 15),
     ),
   ];
 
-  // ---- Estado de UI ----
-  final Set<RutaStatus> _filtros = {}; // vacío = mostrar todos
+  final Set<RutaStatus> _filtros = {};
   String _query = '';
-  int? _seleccionId; // id seleccionado para resaltar
+  int? _seleccionId;
 
-  // ---- Helpers de filtro/búsqueda ----
   List<Ruta> get _filtradas {
     Iterable<Ruta> base = _todas;
     if (_filtros.isNotEmpty) {
@@ -66,7 +64,6 @@ class _RutasPageState extends State<RutasPage> {
           r.direccion.toLowerCase().contains(q) ||
           r.orden.toLowerCase().contains(q));
     }
-    // Pendiente -> En proceso -> Completada
     final list = base.toList();
     list.sort((a, b) => a.estatus.index.compareTo(b.estatus.index));
     return list;
@@ -93,7 +90,6 @@ class _RutasPageState extends State<RutasPage> {
       ),
       body: Column(
         children: [
-          // ---- Barra de filtros + búsqueda ----
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
             child: Column(
@@ -143,7 +139,6 @@ class _RutasPageState extends State<RutasPage> {
             ),
           ),
           const Divider(height: 0),
-          // ---- Lista ----
           Expanded(
             child: ListView.builder(
               itemCount: filtradas.length,
@@ -154,6 +149,9 @@ class _RutasPageState extends State<RutasPage> {
                 return Container(
                   margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
                   decoration: BoxDecoration(
+                    color: r.estatus == RutaStatus.completada
+                        ? Colors.green.shade100 // fondo verde para completadas
+                        : Colors.white,         // blanco para las demás
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       width: isSelected ? 2.2 : 1,
@@ -181,14 +179,12 @@ class _RutasPageState extends State<RutasPage> {
                           _line('Número de contrato', r.contrato),
                           _line('Dirección', r.direccion),
                           _line('Orden', r.orden),
-
-                          // SOLO EN COMPLETADAS: mostrar Inicio y Terminación (en ese orden)
                           if (r.estatus == RutaStatus.completada && r.fechaHoraInicio != null)
                             _pill(
                               label: 'Inicio',
                               value: _formatFechaHora(r.fechaHoraInicio!),
-                              bg: const Color.fromARGB(255, 158, 203, 151),
-                              fg: const Color.fromARGB(255, 8, 81, 16),
+                              bg: const Color.fromARGB(255, 16, 179, 27),
+                              fg: const Color.fromARGB(255, 18, 143, 32),
                             ),
                           if (r.estatus == RutaStatus.completada && r.fechaHoraFin != null)
                             _pill(
@@ -204,19 +200,21 @@ class _RutasPageState extends State<RutasPage> {
                         ? const Icon(Icons.check_circle, size: 28)
                         : const Icon(Icons.chevron_right),
                     isThreeLine: true,
-                    onTap: () async {
-                      final confirmar = await _confirmarSeleccion(context);
-                      if (confirmar == true) {
-                        setState(() => _seleccionId = r.id);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Ruta ${r.id} seleccionada'),
-                            behavior: SnackBarBehavior.floating,
-                            duration: const Duration(milliseconds: 1200),
-                          ),
-                        );
-                      }
-                    },
+                    onTap: r.estatus == RutaStatus.completada
+                        ? null // no se puede seleccionar si ya está completada
+                        : () async {
+                            final confirmar = await _confirmarSeleccion(context);
+                            if (confirmar == true) {
+                              setState(() => _seleccionId = r.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Ruta ${r.id} seleccionada'),
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: const Duration(milliseconds: 1200),
+                                ),
+                              );
+                            }
+                          },
                   ),
                 );
               },
@@ -227,7 +225,6 @@ class _RutasPageState extends State<RutasPage> {
     );
   }
 
-  // Etiqueta redondeada reutilizable (Inicio / Terminación)
   static Widget _pill({
     required String label,
     required String value,
@@ -256,7 +253,6 @@ class _RutasPageState extends State<RutasPage> {
   static String _formatFechaHora(DateTime dt) {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${two(dt.day)}/${two(dt.month)}/${dt.year} ${two(dt.hour)}:${two(dt.minute)}';
-    // Si prefieres formato 12h con am/pm, dime y lo cambio.
   }
 
   static Widget _line(String label, String value) {
