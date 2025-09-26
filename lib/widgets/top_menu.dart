@@ -10,10 +10,6 @@ class TopMenu extends StatelessWidget {
       padding: const EdgeInsets.only(right: 12),
       onSelected: (value) async {
         switch (value) {
-          case _MenuOption.inicio:
-            Navigator.of(context).popUntil((route) => route.isFirst);
-            _showSnack(context, 'Inicio');
-            break;
           case _MenuOption.perfil:
             Navigator.of(context).pushNamed('/perfil');
             break;
@@ -32,18 +28,21 @@ class TopMenu extends StatelessWidget {
         }
       },
       itemBuilder: (context) => const [
-        PopupMenuItem(value: _MenuOption.inicio, child: Text('Inicio')),
         PopupMenuItem(value: _MenuOption.perfil, child: Text('Perfil')),
+        PopupMenuItem(value: _MenuOption.rutas, child: Text('Rutas')),
         PopupMenuItem(value: _MenuOption.ajustes, child: Text('Ajustes')),
-        PopupMenuItem(value: _MenuOption.rutas, child: Text('Rutas')), // 👈 NUEVO
         PopupMenuItem(value: _MenuOption.salir, child: Text('Salir')),
       ],
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 12),
-        child: Text(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,                // fondo blanco
+          borderRadius: BorderRadius.circular(20), // bordes redondeados
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: const Text(
           'Menú',
           style: TextStyle(
-            color: Colors.white,
+            color: Color.fromARGB(255, 8, 95, 176), // color solicitado
             fontWeight: FontWeight.w600,
             letterSpacing: .5,
           ),
@@ -84,4 +83,4 @@ class TopMenu extends StatelessWidget {
 }
 
 // 👇 agrega el nuevo valor 'rutas'
-enum _MenuOption { inicio, perfil, ajustes, rutas, salir }
+enum _MenuOption { perfil, ajustes, rutas, salir }

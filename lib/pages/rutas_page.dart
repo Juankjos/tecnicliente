@@ -164,7 +164,16 @@ class _RutasPageState extends State<RutasPage> {
                     ),
                   ),
                   child: ListTile(
-                    leading: CircleAvatar(child: Text('${r.id}')),
+                    leading: CircleAvatar(
+                      backgroundColor: const Color.fromARGB(255, 246, 246, 246),
+                      child: Text(
+                        '${r.id}',
+                        style: const TextStyle(
+                          color: Color.fromARGB(255, 8, 95, 176),
+                          fontWeight: FontWeight.w700, // opcional
+                        ),
+                      ),
+                    ),
                     title: Row(
                       children: [
                         Expanded(
@@ -188,7 +197,7 @@ class _RutasPageState extends State<RutasPage> {
                             _pill(
                               label: 'Inicio',
                               value: _formatFechaHora(r.fechaHoraInicio!),
-                              bg: const Color.fromARGB(255, 16, 179, 27),
+                              bg: const Color.fromARGB(255, 143, 230, 149),
                               fg: const Color.fromARGB(255, 18, 143, 32),
                             ),
                           if (r.estatus == RutaStatus.completada && r.fechaHoraFin != null)

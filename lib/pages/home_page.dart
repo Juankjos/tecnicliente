@@ -141,62 +141,82 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: HomePage.darkGreen,
-      appBar: AppBar(
+      extendBodyBehindAppBar: true,
+        appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: Colors.white,
-        title: const Text('Técnicos'),
+        leadingWidth: 78,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Image.asset(
+            'assets/images/logo.png',
+            fit: BoxFit.contain,
+          ),
+        ),
+        title: const Text('TecniCliente'),
         actions: const [TopMenu()],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _center,
-                initialZoom: _zoom,
-                interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.all,
+      body: Stack(
+        children: [
+          // Fondo con degradado
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.fromARGB(255, 8, 95, 176),
+                    Color.fromARGB(255, 8, 95, 176),
+                    Color(0xFFF5F8FC),
+                    Colors.white,
+                  ],
+                  stops: [0.0, 0.10, 0.45, 1.0],
                 ),
-                onMapReady: () {
-                  _mapReady = true;
-
-                  // Aplica cualquier destino pendiente (de Rutas o de mi ubicación)
-                  if (_pendingDest != null) {
-                    _mapController.move(_pendingDest!, 16);
-                    _pendingDest = null;
-                  }
-                  setState(() {}); // por si marcadores/estado cambió
-                },
               ),
-              children: [
-                // Tiles OSM
-                TileLayer(
-                  urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  subdomains: const ['a', 'b', 'c'],
-                  userAgentPackageName: 'com.tuempresa.tecnicliente',
-                ),
-
-                // Marcadores
-                MarkerLayer(markers: _markers),
-
-                // Atribución rica (opcional, pero recomendado)
-                RichAttributionWidget(
-                  attributions: [
-                    TextSourceAttribution(
-                      '© OpenStreetMap contributors',
-                      onTap: () {},
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _center,
+                    initialZoom: _zoom,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all,
+                    ),
+                    onMapReady: () {
+                      _mapReady = true;
+                      if (_pendingDest != null) {
+                        _mapController.move(_pendingDest!, 16);
+                        _pendingDest = null;
+                      }
+                      setState(() {});
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      subdomains: const ['a', 'b', 'c'],
+                      userAgentPackageName: 'com.tuempresa.tecnicliente',
+                    ),
+                    MarkerLayer(markers: _markers),
+                    RichAttributionWidget(
+                      attributions: [
+                        TextSourceAttribution('© OpenStreetMap contributors', onTap: () {}),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
