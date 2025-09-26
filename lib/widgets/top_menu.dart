@@ -51,16 +51,6 @@ class TopMenu extends StatelessWidget {
     );
   }
 
-  static void _showSnack(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Seleccionaste: $label'),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(milliseconds: 1200),
-      ),
-    );
-  }
-
   static Future<bool?> _confirmarSalir(BuildContext context) {
     return showDialog<bool>(
       context: context,

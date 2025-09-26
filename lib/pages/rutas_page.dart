@@ -73,7 +73,7 @@ class _RutasPageState extends State<RutasPage> {
     return list;
   }
 
-  // -------- NUEVO: saber si hay una ruta activa (publicada en Home) --------
+  // -------- Saber si hay una ruta activa (publicada en Home) --------
   bool get _hasRutaActiva => DestinationState.instance.selected.value != null;
 
   @override
@@ -146,7 +146,7 @@ class _RutasPageState extends State<RutasPage> {
                   const SizedBox(height: 8),
                   const Text(
                     'RUTA EN CURSO: Cancela o Completa tu ruta para seleccionar otra.',
-                    style: TextStyle(backgroundColor: Color.fromARGB(255, 180, 41, 41), color: Colors.white, fontWeight: FontWeight.w500),
+                    style: TextStyle(backgroundColor: Colors.redAccent, color: Colors.white, fontWeight: FontWeight.w500),
                   ),
                 ],
               ],
@@ -223,6 +223,7 @@ class _RutasPageState extends State<RutasPage> {
                         ? const Icon(Icons.check_circle, size: 28)
                         : const Icon(Icons.chevron_right),
                     isThreeLine: true,
+                    enabled: !_hasRutaActiva && r.estatus != RutaStatus.completada,
                     onTap: r.estatus == RutaStatus.completada
                         ? null
                         : () async {
@@ -252,9 +253,9 @@ class _RutasPageState extends State<RutasPage> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('RUTA EN CURSO'),
+        title: const Text('Ruta en curso'),
         content: const Text(
-          'Ya tienes una ruta activa. Cancela o Completa la ruta para seleccionar otra.',
+          'Ya tienes una ruta activa. Cancélala en el mapa con “Limpiar ruta” antes de seleccionar otra.',
         ),
         actions: [
           TextButton(
@@ -285,7 +286,12 @@ class _RutasPageState extends State<RutasPage> {
 
       final latLng = demoTable[r.direccion] ?? const LatLng(20.8169, -102.7635);
 
-      DestinationState.instance.setWithAddress(latLng, r.direccion);
+      DestinationState.instance.setWithDetails(
+        latLng,
+        address: r.direccion,
+        contract: r.contrato,
+        client: r.cliente,
+      );
 
       if (!mounted) return;
 
@@ -322,8 +328,13 @@ class _RutasPageState extends State<RutasPage> {
       final loc = list.first;
       final latLng = LatLng(loc.latitude, loc.longitude);
 
-      // Publicar destino (coords + dirección)
-      DestinationState.instance.setWithAddress(latLng, r.direccion);
+      // Publicar destino (coords + dirección + contrato + cliente)
+      DestinationState.instance.setWithDetails(
+        latLng,
+        address: r.direccion,
+        contract: r.contrato,
+        client: r.cliente,
+      );
 
       // Cierra SOLO el loader
       Navigator.of(context, rootNavigator: true).pop();

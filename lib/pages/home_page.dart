@@ -102,7 +102,7 @@ class _HomePageState extends State<HomePage> {
       final pos = await Geolocator.getCurrentPosition();
       final me = LatLng(pos.latitude, pos.longitude);
 
-    _markers.removeWhere((m) => m.key == const ValueKey('me'));
+      _markers.removeWhere((m) => m.key == const ValueKey('me'));
       _markers.add(
         Marker(
           key: const ValueKey('me'),
@@ -143,7 +143,7 @@ class _HomePageState extends State<HomePage> {
     if (addr == null || addr.trim().isEmpty || dest == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No hay ruta seleccionada hasta el momento.'),
+          content: Text('No hay ruta seleccionada hasta el momento'),
           behavior: SnackBarBehavior.floating,
           duration: Duration(milliseconds: 1800),
         ),
@@ -167,40 +167,103 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // -------- Botón "Limpiar ruta" con confirmación --------
+  // -------- Botón "Limpiar ruta" con verificación de contrato --------
   Future<void> _onClearRoutePressed() async {
+    final contratoActual = DestinationState.instance.contract.value;
+
+    // Si por alguna razón no hay contrato, usa confirmación simple
+    if (contratoActual == null || contratoActual.trim().isEmpty) {
+      final simple = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Confirmar'),
+          content: const Text('¿Estás seguro que quieres cancelar la ruta?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('No, SEGUIR'),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Sí, limpiar ruta'),
+            ),
+          ],
+        ),
+      );
+      if (simple == true) _doClearRoute();
+      return;
+    }
+
+    final controller = TextEditingController();
+    bool matches = false;
+
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('CANCELAR RUTA'),
-        content: const Text('¿Estás seguro que quieres cancelar la ruta? EL CLIENTE SERÁ NOTIFICADO.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Sí, Limpiar ruta'),
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('CANCELAR RUTA'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('¿Estás seguro que quieres cancelar la ruta?'),
+              Text(
+                'EL CLIENTE SERÁ NOTIFICADO',
+                style: const TextStyle(fontWeight: FontWeight.w700),),
+              const SizedBox(height: 10),
+              Text(
+                'Contrato: $contratoActual',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Escribe el contrato',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (v) {
+                  setState(() {
+                    matches = v.trim() == contratoActual.trim();
+                  });
+                },
+              ),
+            ],
           ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('No, SEGUIR.'),
-          ),
-        ],
+          actions: [
+            FilledButton.tonal(
+              onPressed: matches ? () => Navigator.of(ctx).pop(true) : null,
+              child: const Text('Sí, limpiar ruta'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('No, SEGUIR'),
+            ),
+          ],
+        ),
       ),
     );
 
     if (confirmed == true) {
-      DestinationState.instance.set(null); // limpia coords + address
-      _markers.removeWhere((m) => m.key == const ValueKey('destino'));
-
-      if (mounted) setState(() {});
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ruta cancelada, EL CLIENTE SERÁ NOTIFICADO.'),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(milliseconds: 4000),
-        ),
-      );
+      _doClearRoute();
     }
+  }
+
+  void _doClearRoute() {
+    DestinationState.instance.set(null); // limpia coords + address + contrato + cliente
+    _markers.removeWhere((m) => m.key == const ValueKey('destino'));
+
+    if (mounted) setState(() {});
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Ruta cancelada, EL CLIENTE SERÁ NOTIFICADO.'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(milliseconds: 4000),
+      ),
+    );
   }
 
   @override
