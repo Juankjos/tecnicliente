@@ -1,4 +1,3 @@
-// lib/pages/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -103,7 +102,7 @@ class _HomePageState extends State<HomePage> {
       final pos = await Geolocator.getCurrentPosition();
       final me = LatLng(pos.latitude, pos.longitude);
 
-      _markers.removeWhere((m) => m.key == const ValueKey('me'));
+    _markers.removeWhere((m) => m.key == const ValueKey('me'));
       _markers.add(
         Marker(
           key: const ValueKey('me'),
@@ -136,44 +135,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _onClearRoutePressed() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('CANCELACIÓN DE RUTA'),
-        content: const Text('¿Estás seguro que quieres cancelar la ruta? EL CLIENTE SERÁ NOTIFICADO.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('No, seguir ruta'),
-          ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Sí, cancelar ruta'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      // Limpia destino + dirección (tu DestinationState.set(null) ya limpia address)
-      DestinationState.instance.set(null);
-      _markers.removeWhere((m) => m.key == const ValueKey('destino'));
-
-      if (mounted) setState(() {});
-
-      // (Opcional) aviso breve
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ruta cancelada, EL CLIENTE SERÁ NOTIFICADO.'),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(milliseconds: 3000),
-        ),
-      );
-    }
-  }
-
-  // -------- NUEVO: botón "Ruta" en AppBar --------
+  // -------- Botón "Ver ruta actual" en AppBar --------
   void _onShowRoutePressed() {
     final addr = DestinationState.instance.address.value;
     final dest = DestinationState.instance.selected.value;
@@ -183,7 +145,7 @@ class _HomePageState extends State<HomePage> {
         const SnackBar(
           content: Text('No hay ruta seleccionada hasta el momento.'),
           behavior: SnackBarBehavior.floating,
-          duration: Duration(milliseconds: 2000),
+          duration: Duration(milliseconds: 1800),
         ),
       );
       return;
@@ -205,6 +167,42 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // -------- Botón "Limpiar ruta" con confirmación --------
+  Future<void> _onClearRoutePressed() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('CANCELAR RUTA'),
+        content: const Text('¿Estás seguro que quieres cancelar la ruta? EL CLIENTE SERÁ NOTIFICADO.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Sí, Limpiar ruta'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No, SEGUIR.'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      DestinationState.instance.set(null); // limpia coords + address
+      _markers.removeWhere((m) => m.key == const ValueKey('destino'));
+
+      if (mounted) setState(() {});
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ruta cancelada, EL CLIENTE SERÁ NOTIFICADO.'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(milliseconds: 4000),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -224,7 +222,7 @@ class _HomePageState extends State<HomePage> {
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: TextButton(
-              onPressed: _onShowRoutePressed, // usa la misma función que ya tienes
+              onPressed: _onShowRoutePressed,
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
                 backgroundColor: const Color.fromARGB(255, 45, 129, 48),
@@ -268,9 +266,7 @@ class _HomePageState extends State<HomePage> {
                   options: MapOptions(
                     initialCenter: _center,
                     initialZoom: _zoom,
-                    interactionOptions: const InteractionOptions(
-                      flags: InteractiveFlag.all,
-                    ),
+                    interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
                     onMapReady: () {
                       _mapReady = true;
                       if (_pendingDest != null) {

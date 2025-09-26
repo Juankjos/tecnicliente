@@ -1,4 +1,3 @@
-// lib/pages/rutas_page.dart
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart' as gc;
 import 'package:latlong2/latlong.dart' show LatLng;
@@ -26,7 +25,7 @@ class _RutasPageState extends State<RutasPage> {
       id: 2,
       cliente: 'Adriana Esmeralda Rodríguez Muñóz',
       contrato: '456789-1',
-      direccion: 'C. J. Cruz Ramírez 545, San Antonio El Alto, 47640 Tepatitlán de Morelos, Jal.',
+      direccion: 'C. J. Cruz Ramírez 545-531, San Antonio El Alto, 47640 Tepatitlán de Morelos, Jal.',
       orden: 'Instalación de TV digital.',
       estatus: RutaStatus.enProceso,
     ),
@@ -34,7 +33,7 @@ class _RutasPageState extends State<RutasPage> {
       id: 3,
       cliente: 'Homero Simpson Springfield',
       contrato: '987654-2',
-      direccion: 'C. J. Luis Velazco 159, Cerrito de La Cruz, 47610 Tepatitlán de Morelos, Jal.',
+      direccion: 'C. J. Luis Velazco 159-129, Cerrito de La Cruz, 47610 Tepatitlán de Morelos, Jal.',
       orden: 'Reconexión de servicio.',
       estatus: RutaStatus.completada,
       fechaHoraInicio: DateTime(2025, 9, 18, 15, 10),
@@ -44,7 +43,7 @@ class _RutasPageState extends State<RutasPage> {
       id: 4,
       cliente: 'Cósimo Juárez Travaldaba',
       contrato: '741258-9',
-      direccion: 'Quirino Navarro 408, Santa Monica, 47634 Tepatitlán de Morelos, Jal.',
+      direccion: 'Quirino Navarro 408-452, Santa Monica, 47634 Tepatitlán de Morelos, Jal.',
       orden: 'Retiro de equipo.',
       estatus: RutaStatus.completada,
       fechaHoraInicio: DateTime(2025, 9, 19, 10, 20),
@@ -73,6 +72,9 @@ class _RutasPageState extends State<RutasPage> {
     list.sort((a, b) => a.estatus.index.compareTo(b.estatus.index));
     return list;
   }
+
+  // -------- NUEVO: saber si hay una ruta activa (publicada en Home) --------
+  bool get _hasRutaActiva => DestinationState.instance.selected.value != null;
 
   @override
   Widget build(BuildContext context) {
@@ -140,6 +142,13 @@ class _RutasPageState extends State<RutasPage> {
                   ),
                   onChanged: (text) => setState(() => _query = text),
                 ),
+                if (_hasRutaActiva) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'RUTA EN CURSO: Cancela o Completa tu ruta para seleccionar otra.',
+                    style: TextStyle(backgroundColor: Color.fromARGB(255, 180, 41, 41), color: Colors.white, fontWeight: FontWeight.w500),
+                  ),
+                ],
               ],
             ),
           ),
@@ -170,7 +179,7 @@ class _RutasPageState extends State<RutasPage> {
                         '${r.id}',
                         style: const TextStyle(
                           color: Color.fromARGB(255, 8, 95, 176),
-                          fontWeight: FontWeight.w700, // opcional
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -217,16 +226,47 @@ class _RutasPageState extends State<RutasPage> {
                     onTap: r.estatus == RutaStatus.completada
                         ? null
                         : () async {
+                            // Si ya hay una ruta activa, no permitimos seleccionar otra
+                            if (_hasRutaActiva) {
+                              await _mostrarAvisoRutaActiva();
+                              return;
+                            }
+
                             final confirmar = await _confirmarSeleccion(context);
                             if (confirmar == true) {
                               setState(() => _seleccionId = r.id);
-                              await _geocodificarYEnviar(r); // 👈 NUEVO
+                              await _geocodificarYEnviar(r); // geocoding + publicar destino
                             }
                           },
                   ),
                 );
               },
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _mostrarAvisoRutaActiva() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('RUTA EN CURSO'),
+        content: const Text(
+          'Ya tienes una ruta activa. Cancela o Completa la ruta para seleccionar otra.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cerrar'),
+          ),
+          FilledButton.tonal(
+            onPressed: () {
+              Navigator.of(ctx).pop();     // cierra el diálogo
+              Navigator.of(context).pop();  // regresa a Home (mapa)
+            },
+            child: const Text('Ir al mapa'),
           ),
         ],
       ),
