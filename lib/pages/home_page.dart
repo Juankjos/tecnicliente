@@ -50,12 +50,10 @@ class _HomePageState extends State<HomePage> {
   Future<void> _initMyLocation() async {
     try {
       var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
         perm = await Geolocator.requestPermission();
       }
-      final has = (perm == LocationPermission.always ||
-          perm == LocationPermission.whileInUse);
+      final has = (perm == LocationPermission.always || perm == LocationPermission.whileInUse);
 
       if (has) {
         final pos = await Geolocator.getCurrentPosition();
@@ -138,24 +136,107 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _onClearRoutePressed() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('CANCELACIÓN DE RUTA'),
+        content: const Text('¿Estás seguro que quieres cancelar la ruta? EL CLIENTE SERÁ NOTIFICADO.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No, seguir ruta'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Sí, cancelar ruta'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      // Limpia destino + dirección (tu DestinationState.set(null) ya limpia address)
+      DestinationState.instance.set(null);
+      _markers.removeWhere((m) => m.key == const ValueKey('destino'));
+
+      if (mounted) setState(() {});
+
+      // (Opcional) aviso breve
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ruta cancelada, EL CLIENTE SERÁ NOTIFICADO.'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(milliseconds: 3000),
+        ),
+      );
+    }
+  }
+
+  // -------- NUEVO: botón "Ruta" en AppBar --------
+  void _onShowRoutePressed() {
+    final addr = DestinationState.instance.address.value;
+    final dest = DestinationState.instance.selected.value;
+
+    if (addr == null || addr.trim().isEmpty || dest == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay ruta seleccionada hasta el momento.'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(milliseconds: 2000),
+        ),
+      );
+      return;
+    }
+
+    // Re-centrar en el destino por si el usuario se movió
+    if (_mapReady) {
+      _mapController.move(dest, 16);
+    } else {
+      _pendingDest = dest;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Dirigiéndose a domicilio\n$addr'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 4000),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
-        appBar: AppBar(
+      appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: Colors.white,
         leadingWidth: 78,
         leading: Padding(
           padding: const EdgeInsets.only(left: 12),
-          child: Image.asset(
-            'assets/images/logo.png',
-            fit: BoxFit.contain,
-          ),
+          child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
         ),
         title: const Text('TecniCliente'),
-        actions: const [TopMenu()],
+        actions: [
+          // 👇 Botón de texto "Ver ruta actual"
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: TextButton(
+              onPressed: _onShowRoutePressed, // usa la misma función que ya tienes
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: const Color.fromARGB(255, 45, 129, 48),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                textStyle: const TextStyle(fontWeight: FontWeight.w500),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Ver Ruta Actual'),
+            ),
+          ),
+          const TopMenu(),
+        ],
       ),
       body: Stack(
         children: [
@@ -227,17 +308,17 @@ class _HomePageState extends State<HomePage> {
             label: const Text('Mi ubicación'),
             icon: const Icon(Icons.my_location),
           ),
-          const SizedBox(height: 10),
-          FloatingActionButton.extended(
-            heroTag: 'clear',
-            onPressed: () {
-              DestinationState.instance.set(null);
-              _markers.removeWhere((m) => m.key == const ValueKey('destino'));
-              if (mounted) setState(() {});
-            },
-            label: const Text('Limpiar destino'),
-            icon: const Icon(Icons.clear),
-          ),
+
+          // Solo si hay una ruta seleccionada
+          if (DestinationState.instance.selected.value != null) ...[
+            const SizedBox(height: 10),
+            FloatingActionButton.extended(
+              heroTag: 'clear',
+              onPressed: _onClearRoutePressed,
+              label: const Text('Cancelar ruta'),
+              icon: const Icon(Icons.clear),
+            ),
+          ],
         ],
       ),
     );

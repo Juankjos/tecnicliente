@@ -26,7 +26,7 @@ class _RutasPageState extends State<RutasPage> {
       id: 2,
       cliente: 'Adriana Esmeralda Rodríguez Muñóz',
       contrato: '456789-1',
-      direccion: 'C. J. Cruz Ramírez 545-531, San Antonio El Alto, 47640 Tepatitlán de Morelos, Jal.',
+      direccion: 'C. J. Cruz Ramírez 545, San Antonio El Alto, 47640 Tepatitlán de Morelos, Jal.',
       orden: 'Instalación de TV digital.',
       estatus: RutaStatus.enProceso,
     ),
@@ -34,7 +34,7 @@ class _RutasPageState extends State<RutasPage> {
       id: 3,
       cliente: 'Homero Simpson Springfield',
       contrato: '987654-2',
-      direccion: 'C. J. Luis Velazco 159-129, Cerrito de La Cruz, 47610 Tepatitlán de Morelos, Jal.',
+      direccion: 'C. J. Luis Velazco 159, Cerrito de La Cruz, 47610 Tepatitlán de Morelos, Jal.',
       orden: 'Reconexión de servicio.',
       estatus: RutaStatus.completada,
       fechaHoraInicio: DateTime(2025, 9, 18, 15, 10),
@@ -44,7 +44,7 @@ class _RutasPageState extends State<RutasPage> {
       id: 4,
       cliente: 'Cósimo Juárez Travaldaba',
       contrato: '741258-9',
-      direccion: 'Quirino Navarro 408-452, Santa Monica, 47634 Tepatitlán de Morelos, Jal.',
+      direccion: 'Quirino Navarro 408, Santa Monica, 47634 Tepatitlán de Morelos, Jal.',
       orden: 'Retiro de equipo.',
       estatus: RutaStatus.completada,
       fechaHoraInicio: DateTime(2025, 9, 19, 10, 20),
@@ -245,21 +245,21 @@ class _RutasPageState extends State<RutasPage> {
 
       final latLng = demoTable[r.direccion] ?? const LatLng(20.8169, -102.7635);
 
-      DestinationState.instance.set(latLng);
+      DestinationState.instance.setWithAddress(latLng, r.direccion);
 
       if (!mounted) return;
 
-      // 👇 Muestra el aviso ANTES de navegar
+      // Aviso ANTES de navegar
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Demo web: destino fijado para "${r.cliente}"')),
+        SnackBar(content: Text('Destino fijado para "${r.direccion}" ¡BUEN VIAJE!')),
       );
 
-      // 👇 SOLO un pop para volver a Home
+      // Solo un pop para volver a Home
       Navigator.of(context).pop();
       return;
     }
 
-    // Pequeño loader modal sin cambiar tu layout
+    // Loader modal (root navigator)
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -270,7 +270,9 @@ class _RutasPageState extends State<RutasPage> {
     try {
       final list = await gc.locationFromAddress(r.direccion);
       if (list.isEmpty) {
-        Navigator.of(context, rootNavigator: true).pop(); // cierra loader
+        // Cierra SOLO el loader
+        Navigator.of(context, rootNavigator: true).pop();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('No se pudo geocodificar la dirección')),
         );
@@ -280,12 +282,14 @@ class _RutasPageState extends State<RutasPage> {
       final loc = list.first;
       final latLng = LatLng(loc.latitude, loc.longitude);
 
-      // Publicar destino para HomePage (mover cámara y marcador)
-      DestinationState.instance.set(latLng);
+      // Publicar destino (coords + dirección)
+      DestinationState.instance.setWithAddress(latLng, r.direccion);
 
-      Navigator.of(context).pop(); // cierra loader
+      // Cierra SOLO el loader
+      Navigator.of(context, rootNavigator: true).pop();
       if (!mounted) return;
 
+      // Aviso (en esta página) y regresar a Home
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Ruta ${r.id} seleccionada'),
@@ -294,10 +298,11 @@ class _RutasPageState extends State<RutasPage> {
         ),
       );
 
-      // Opcional: regresar a Home al terminar
+      // Vuelve a Home
       Navigator.of(context).pop();
     } catch (e) {
-      Navigator.of(context).pop(); // cierra loader
+      // Cierra SOLO el loader
+      Navigator.of(context, rootNavigator: true).pop();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error de geocodificación: $e')),
