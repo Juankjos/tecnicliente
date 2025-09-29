@@ -17,24 +17,15 @@ class PerfilPage extends StatelessWidget {
           const SizedBox(height: 16),
           Center(
             child: Text(
-              'Nombre del usuario',
+              'Alfonso Enriquez Juarez',
               style: Theme.of(context).textTheme.titleLarge,
             ),
           ),
           const SizedBox(height: 24),
-          const _ItemDato(icon: Icons.email, label: 'Correo', value: 'soporte6@tvctepa.com'),
+          const _ItemDato(icon: Icons.email, label: 'Correo', value: 'Sin Correo'),
           const _ItemDato(icon: Icons.phone, label: 'Teléfono', value: '+52 378 711 4606'),
           const _ItemDato(icon: Icons.location_on, label: 'Ubicación', value: 'Tepatitlán, Jalisco'),
           const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Editar perfil (pendiente)')),
-              );
-            },
-            icon: const Icon(Icons.edit),
-            label: const Text('Editar perfil'),
-          ),
         ],
       ),
     );
