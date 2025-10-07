@@ -6,7 +6,7 @@ class AjustesPage extends StatefulWidget {
   @override
   State<AjustesPage> createState() => _AjustesPageState();
 }
-
+//LOL
 class _AjustesPageState extends State<AjustesPage> {
   bool notificaciones = true;
   bool temaOscuro = false;
