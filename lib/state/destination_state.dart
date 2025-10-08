@@ -17,15 +17,10 @@ class DestinationState {
   /// Cliente de la ruta seleccionada
   final ValueNotifier<String?> client = ValueNotifier<String?>(null);
 
-  /// Mantén compatibilidad con tu código existente
-  void set(LatLng? value) {
-    selected.value = value;
-    if (value == null) {
-      address.value = null;
-      contract.value = null;
-      client.value = null;
-    }
-  }
+  bool get hasSelection => selected.value != null;
+
+  /// Compatibilidad con tu código existente
+  void set(LatLng? value) => setWithDetails(value);
 
   /// Establece coordenadas y metadatos de la ruta
   void setWithDetails(
@@ -39,6 +34,9 @@ class DestinationState {
     this.contract.value = contract;
     this.client.value = client;
   }
+
+  /// Limpia todo
+  void clear() => setWithDetails(null);
 
   /// Compatibilidad con versiones previas (usa setWithDetails en lo nuevo)
   @Deprecated('Usa setWithDetails en su lugar')

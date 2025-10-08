@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:latlong2/latlong.dart' show LatLng;
@@ -19,6 +22,15 @@ Uri _apiUri(String pathWithQuery) {
   return Uri.parse('$base/$pathWithQuery');
 }
 
+/// ✅ Mover ESTA clase al tope (fuera del State)
+class _GeoCand {
+  final String label;
+  final double lat;
+  final double lon;
+  final double score; // 0..1
+  const _GeoCand(this.label, this.lat, this.lon, this.score);
+}
+
 class RutasPage extends StatefulWidget {
   const RutasPage({super.key});
 
@@ -26,6 +38,7 @@ class RutasPage extends StatefulWidget {
   State<RutasPage> createState() => _RutasPageState();
 }
 
+// PÁGINA PARA SELECCIONAR RUTAS
 class _RutasPageState extends State<RutasPage> {
   final RutasApi _api = RutasApi(_apiUri);
 
@@ -42,13 +55,14 @@ class _RutasPageState extends State<RutasPage> {
     _cargarRutas();
   }
 
+  // FETCH de rutas (por técnico o contrato)
   Future<void> _cargarRutas() async {
     setState(() => _cargando = true);
     try {
-      // Para tu caso puntual, por contrato 81580:
-      final rutas = await _api.fetchPorContrato('81580');
-      // O por técnico 106:
-      // final rutas = await _api.fetchPorTecnico(106);
+      // Por técnico 106:
+      final rutas = await _api.fetchPorTecnico(106);
+      // O por contrato:
+      // final rutas = await _api.fetchPorContrato('81580');
 
       setState(() {
         _todas = rutas;
@@ -63,6 +77,7 @@ class _RutasPageState extends State<RutasPage> {
     }
   }
 
+  // FILTRO DE RUTAS
   List<Ruta> get _filtradas {
     Iterable<Ruta> base = _todas;
     if (_filtros.isNotEmpty) {
@@ -87,6 +102,7 @@ class _RutasPageState extends State<RutasPage> {
   Widget build(BuildContext context) {
     final filtradas = _filtradas;
 
+    // PÁGINA DE RUTAS
     return Scaffold(
       appBar: AppBar(
         title: const Text('Rutas'),
@@ -174,7 +190,7 @@ class _RutasPageState extends State<RutasPage> {
                         await _mostrarAvisoRutaActiva();
                         return;
                       }
-                      final confirmar = await _confirmarSeleccion(context);
+                      final confirmar = await _confirmarSeleccion(context, r);
                       if (confirmar == true) {
                         setState(() => _seleccionId = r.id);
                         await _geocodificarYEnviar(r);
@@ -207,17 +223,59 @@ class _RutasPageState extends State<RutasPage> {
     );
   }
 
-  Future<void> _geocodificarYEnviar(Ruta r) async {
-    if (kIsWeb) {
-      // Fallback simple (centro de Tepatitlán aprox.)
-      const latLng = LatLng(20.8169, -102.7635);
-      DestinationState.instance.setWithDetails(latLng, address: r.direccion, contract: r.contrato, client: r.cliente);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Destino fijado para "${r.direccion}" ¡BUEN VIAJE!')));
-      Navigator.of(context).pop();
-      return;
-    }
+  Future<bool?> _confirmarSeleccion(BuildContext context, Ruta r) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirmar'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('¿Deseas seleccionar esta ruta?'),
+            const SizedBox(height: 8),
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(color: Colors.black87),
+                children: [
+                  const TextSpan(text: 'Contrato: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                  TextSpan(text: r.contrato),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(color: Colors.black87),
+                children: [
+                  const TextSpan(text: 'Dirección: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                  TextSpan(text: r.direccion),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Seleccionar'),
+          ),
+        ],
+      ),
+    );
+  }
 
+  // --------------------- Geocodificación GRATIS ---------------------
+  // En Web: Nominatim (OSM) + Photon (sin cuenta). En móviles: plugin geocoding.
+  Future<void> _geocodificarYEnviar(Ruta r) async {
+    // Sesgo de cercanía: centro de Tepatitlán (mejora relevancia)
+    const proximity = (20.8169, -102.7635);
+
+    // Loader
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -226,45 +284,187 @@ class _RutasPageState extends State<RutasPage> {
     );
 
     try {
-      final list = await gc.locationFromAddress(r.direccion);
-      if (list.isEmpty) {
-        Navigator.of(context, rootNavigator: true).pop();
+      if (kIsWeb) {
+        // --- Web: OSM (Nominatim + Photon) ---
+        final results = await _geocodeOSM(r.direccion, proximity: proximity);
+
+        if (mounted) Navigator.of(context, rootNavigator: true).pop();
+
+        if (results.isEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se encontró la dirección. Intenta ajustar la búsqueda.')),
+          );
+          return;
+        }
+
+        // Si hay un match fuerte o único, úsalo; si no, deja elegir
+        _GeoCand? chosen;
+        if (results.first.score >= 0.9 || results.length == 1) {
+          chosen = results.first;
+        } else {
+          chosen = await showDialog<_GeoCand>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('Confirma dirección'),
+              content: SizedBox(
+                width: 420,
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: results.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (ctx, i) => ListTile(
+                    title: Text(results[i].label),
+                    subtitle: Text('Confianza aprox: ${(results[i].score * 100).toStringAsFixed(0)}%'),
+                    onTap: () => Navigator.of(ctx).pop(results[i]),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancelar')),
+              ],
+            ),
+          );
+          if (chosen == null) return;
+        }
+
+        final latLng = LatLng(chosen.lat, chosen.lon);
+        DestinationState.instance.setWithDetails(
+          latLng,
+          address: chosen.label,
+          contract: r.contrato,
+          client: r.cliente,
+        );
+
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo geocodificar la dirección')));
-        return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Destino fijado: ${chosen.label}')),
+        );
+        Navigator.of(context).pop(); // volver al mapa/home
+      } else {
+        // --- Android/iOS: plugin nativo geocoding (sin keys) ---
+        final list = await gc.locationFromAddress(r.direccion);
+        if (mounted) Navigator.of(context, rootNavigator: true).pop();
+        if (list.isEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo geocodificar la dirección')),
+          );
+          return;
+        }
+        final loc = list.first;
+        final latLng = LatLng(loc.latitude, loc.longitude);
+        DestinationState.instance.setWithDetails(
+          latLng,
+          address: r.direccion,
+          contract: r.contrato,
+          client: r.cliente,
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ruta seleccionada')),
+        );
+        Navigator.of(context).pop();
       }
-
-      final loc = list.first;
-      final latLng = LatLng(loc.latitude, loc.longitude);
-
-      DestinationState.instance.setWithDetails(latLng, address: r.direccion, contract: r.contrato, client: r.cliente);
-
-      Navigator.of(context, rootNavigator: true).pop();
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ruta seleccionada'), behavior: SnackBarBehavior.floating, duration: Duration(milliseconds: 1200)),
-      );
-
-      Navigator.of(context).pop();
     } catch (e) {
-      Navigator.of(context, rootNavigator: true).pop();
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error de geocodificación: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al geolocalizar: $e')),
+      );
     }
   }
 
-  Future<bool?> _confirmarSeleccion(BuildContext context) {
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirmar'),
-        content: const Text('¿Deseas seleccionar esta ruta?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Seleccionar')),
-        ],
-      ),
-    );
+  // ---------- Helpers OSM (Nominatim + Photon) ----------
+  Future<List<_GeoCand>> _geocodeOSM(String raw, { (double lat, double lon)? proximity }) async {
+    // Normaliza un poco (quita “Colonia/Ciudad”, espacios extra)
+    String q = raw
+        .replaceAll(RegExp(r'\bColonia\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\bCiudad\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    // Variantes con ciudades comunes de tu zona
+    final variants = <String>{
+      q,
+      '$q Tepatitlán de Morelos, Jalisco, México',
+      '$q San José de Gracia, Jalisco, México',
+    }.toList();
+
+    for (final v in variants) {
+      final n = await _osmNominatim(v, proximity: proximity);
+      if (n.isNotEmpty) return n;
+    }
+    for (final v in variants) {
+      final p = await _osmPhoton(v, proximity: proximity);
+      if (p.isNotEmpty) return p;
+    }
+    return const <_GeoCand>[];
+  }
+
+  Future<List<_GeoCand>> _osmNominatim(
+    String query, {
+    int limit = 5,
+    String language = 'es',
+    String country = 'mx',
+    (double lat, double lon)? proximity,
+  }) async {
+    final qp = <String, String>{
+      'q': query,
+      'format': 'jsonv2',
+      'limit': '$limit',
+      'addressdetails': '0',
+      'accept-language': language,
+      'countrycodes': country,
+      if (proximity != null)
+        'viewbox':
+            '${proximity.$2 - 0.6},${proximity.$1 + 0.6},${proximity.$2 + 0.6},${proximity.$1 - 0.6}', // lonLatBox
+    };
+    final uri = Uri.https('nominatim.openstreetmap.org', '/search', qp);
+    // Nominatim exige un User-Agent identificable
+    final headers = {'User-Agent': 'TVC-Rutas/1.0 (tvc.s34rch@gmail.com)'};
+
+    final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (res.statusCode != 200) {
+      throw Exception('Nominatim ${res.statusCode}: ${res.body}');
+    }
+    final list = (json.decode(res.body) as List).cast<Map<String, dynamic>>();
+    return list.map((m) {
+      final lat = double.tryParse('${m['lat']}') ?? 0.0;
+      final lon = double.tryParse('${m['lon']}') ?? 0.0;
+      final imp = (m['importance'] is num) ? (m['importance'] as num).toDouble() : 0.0;
+      return _GeoCand('${m['display_name']}', lat, lon, imp.clamp(0.0, 1.0));
+    }).toList();
+  }
+
+  Future<List<_GeoCand>> _osmPhoton(
+    String query, {
+    int limit = 5,
+    String language = 'es',
+    (double lat, double lon)? proximity,
+  }) async {
+    final qp = <String, String>{
+      'q': query,
+      'lang': language,
+      'limit': '$limit',
+      if (proximity != null) 'lat': '${proximity.$1}',
+      if (proximity != null) 'lon': '${proximity.$2}',
+    };
+    final uri = Uri.https('photon.komoot.io', '/api/', qp);
+    final headers = {'User-Agent': 'TVC-Rutas/1.0 (tvc.s34rch@gmail.com)'};
+
+    final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 12));
+    if (res.statusCode != 200) {
+      throw Exception('Photon ${res.statusCode}: ${res.body}');
+    }
+    final body = (json.decode(res.body) as Map<String, dynamic>);
+    final feats = (body['features'] as List?) ?? const [];
+    return feats.map<_GeoCand>((f) {
+      final props = (f as Map)['properties'] as Map;
+      final geom = f['geometry'] as Map;
+      final coords = (geom['coordinates'] as List).cast<num>();
+      final label = (props['name'] ?? props['label'] ?? '').toString();
+      return _GeoCand(label, coords[1].toDouble(), coords[0].toDouble(), 0.8);
+    }).toList();
   }
 }
