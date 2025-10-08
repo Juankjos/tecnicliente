@@ -46,9 +46,9 @@ class _RutasPageState extends State<RutasPage> {
     setState(() => _cargando = true);
     try {
       // Para tu caso puntual (IDContrato 81580):
-      final uri = _apiUri("get_rutas.php?idContrato=81580");
+      // final uri = _apiUri("get_rutas.php?idContrato=81580");
       // Si quieres traer por técnico (106), usa:
-      // final uri = _apiUri("get_rutas.php?idTec=106");
+      final uri = _apiUri("get_rutas.php?idTec=106");
 
       final res = await http.get(uri).timeout(const Duration(seconds: 12));
       if (res.statusCode != 200) {
@@ -151,6 +151,14 @@ class _RutasPageState extends State<RutasPage> {
                   spacing: 8,
                   runSpacing: 4,
                   children: [
+                    _FiltroChip(
+                      label: 'Pendiente',
+                      selected: _filtros.contains(RutaStatus.pendiente),
+                      color: Colors.orange,
+                      onSelected: (v) => setState(() {
+                        v ? _filtros.add(RutaStatus.pendiente) : _filtros.remove(RutaStatus.pendiente);
+                      }),
+                    ),
                     _FiltroChip(
                       label: 'En Camino',
                       selected: _filtros.contains(RutaStatus.enCamino),
