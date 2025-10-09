@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../widgets/top_menu.dart';
 import '../state/destination_state.dart';
+import 'package:mi_app/widgets/route_polyline_layer.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -351,6 +352,7 @@ class _HomePageState extends State<HomePage> {
                         TextSourceAttribution('© OpenStreetMap contributors', onTap: () {}),
                       ],
                     ),
+                    const RoutePolylineLayer(profile: 'driving'),
                   ],
                 ),
               ),
