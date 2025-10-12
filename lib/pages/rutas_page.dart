@@ -55,14 +55,96 @@ class _RutasPageState extends State<RutasPage> {
     _cargarRutas();
   }
 
+  Future<void> _persistirEnCamino(Ruta r) async {
+    // Solo aplica si estaba "Pendiente"
+    if (r.estatus != RutaStatus.pendiente) return;
+
+    // 1) Cambio visual inmediato
+    _aplicarEnCaminoUI(r);
+
+    try {
+      // 2) POST real al backend
+      await _api.cambiarEstatus(
+        idReporte: r.id,            // Asegúrate: Ruta.id == IDReporte
+        status: 'En camino',
+        fechaInicio: DateTime.now(),
+      );
+
+      // 3) (opcional) leer del server para asegurar consistencia:
+      // await _cargarRutas();
+
+    } catch (e) {
+      // Revertir visual si falla el backend
+      setState(() {
+        final i = _todas.indexWhere((x) => x.id == r.id);
+        if (i != -1) {
+          final x = _todas[i];
+          _todas = List<Ruta>.from(_todas)
+            ..[i] = Ruta(
+              id: x.id,
+              cliente: x.cliente,
+              contrato: x.contrato,
+              direccion: x.direccion,
+              orden: x.orden,
+              estatus: RutaStatus.pendiente,
+              fechaHoraInicio: x.fechaHoraInicio,
+              fechaHoraFin: x.fechaHoraFin,
+            );
+        }
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo marcar En camino: $e')),
+      );
+    }
+  }
+
+  void _aplicarEnCaminoUI(Ruta r) {
+    final now = DateTime.now();
+    setState(() {
+      final i = _todas.indexWhere((x) => x.id == r.id);
+      if (i == -1) return;
+
+      final x = _todas[i];
+      _todas = List<Ruta>.from(_todas)
+        ..[i] = Ruta(
+          id: x.id,
+          cliente: x.cliente,
+          contrato: x.contrato,
+          direccion: x.direccion,
+          orden: x.orden,
+          estatus: RutaStatus.enCamino,
+          fechaHoraInicio: x.fechaHoraInicio ?? now,
+          fechaHoraFin: x.fechaHoraFin,
+        );
+    });
+  }
+
   // FETCH de rutas (por técnico o contrato)
   Future<void> _cargarRutas() async {
     setState(() => _cargando = true);
     try {
-      // Por técnico 106:
-      final rutas = await _api.fetchPorTecnico(106);
-      // O por contrato:
-      // final rutas = await _api.fetchPorContrato('81580');
+      var rutas = await _api.fetchPorTecnico(106);  // <-- var (no final)
+
+      // Si hay una ruta activa en memoria, refleja 'En Camino' visualmente
+      final activeContract = DestinationState.instance.contract.value;
+      if (activeContract != null) {
+        rutas = rutas.map((x) {
+          if (x.contrato == activeContract && x.estatus == RutaStatus.pendiente) {
+            return Ruta(
+              id: x.id,
+              cliente: x.cliente,
+              contrato: x.contrato,
+              direccion: x.direccion,
+              orden: x.orden,
+              estatus: RutaStatus.enCamino,
+              fechaHoraInicio: x.fechaHoraInicio ?? DateTime.now(),
+              fechaHoraFin: x.fechaHoraFin,
+            );
+          }
+          return x;
+        }).toList();
+      }
 
       setState(() {
         _todas = rutas;
@@ -76,6 +158,7 @@ class _RutasPageState extends State<RutasPage> {
       );
     }
   }
+
 
   // FILTRO DE RUTAS
   List<Ruta> get _filtradas {
@@ -336,6 +419,8 @@ class _RutasPageState extends State<RutasPage> {
           client: r.cliente,
         );
 
+        await _persistirEnCamino(r);
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Destino fijado: ${chosen.label}')),
@@ -360,6 +445,9 @@ class _RutasPageState extends State<RutasPage> {
           contract: r.contrato,
           client: r.cliente,
         );
+
+        await _persistirEnCamino(r);
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Ruta seleccionada')),

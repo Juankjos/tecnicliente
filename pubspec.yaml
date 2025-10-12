@@ -11,6 +11,9 @@ dependencies:
   flutter:
     sdk: flutter
 
+  #Persistir ruta activa
+  shared_preferences: ^2.3.2
+
   # Networking
   http: ^1.2.2
 

@@ -1,28 +1,37 @@
 <?php
+// htdocs/tecnicliente/get_rutas.php
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json; charset=utf-8');
+
+// Evita que PHP imprima HTML de errores (que rompe el JSON)
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+
+function json_fail(int $code, string $msg, string $detail = null) {
+  http_response_code($code);
+  $out = ['ok' => false, 'error' => $msg];
+  if ($detail !== null) $out['detail'] = $detail;
+  echo json_encode($out, JSON_UNESCAPED_UNICODE);
+  exit;
+}
 
 $host = "127.0.0.1";
 $user = "root";
 $pass = "";
 $db   = "clientes";
 
-$idTec       = isset($_GET['idTec']) ? intval($_GET['idTec']) : null;
-$idContrato  = isset($_GET['idContrato']) ? $_GET['idContrato'] : null;
+$idTec      = isset($_GET['idTec']) ? intval($_GET['idTec']) : null;
+$idContrato = isset($_GET['idContrato']) ? trim($_GET['idContrato']) : null;
 
-if ($idTec === null && $idContrato === null) {
-  http_response_code(400);
-  echo json_encode(["error" => "Falta idTec o idContrato"]);
-  exit;
+if ($idTec === null && ($idContrato === null || $idContrato === '')) {
+  json_fail(400, 'Falta idTec o idContrato');
 }
 
-$mysqli = new mysqli($host, $user, $pass, $db);
+$mysqli = @new mysqli($host, $user, $pass, $db);
 if ($mysqli->connect_errno) {
-  http_response_code(500);
-  echo json_encode(["error" => "Error de conexión"]);
-  exit;
+  json_fail(500, 'Error de conexión', $mysqli->connect_error);
 }
 $mysqli->set_charset('utf8mb4');
 
@@ -46,47 +55,56 @@ function limpiar_direccion($dirRaw) {
 
 $sql = "
   SELECT
-    p.IDReporte       AS id,
-    p.IDContrato      AS contrato,
-    u.Nombre          AS cliente,
-    u.Direccion       AS direccion,
-    COALESCE(r.Problema, '') AS orden,
-    p.Status          AS estatus,
-    p.FechaInicio     AS fecha_inicio,
-    p.FechaFin        AS fecha_fin
+    p.IDReporte             AS IDReporte,
+    p.IDContrato            AS IDContrato,
+    u.Nombre                AS Nombre,
+    u.Direccion             AS Direccion,
+    COALESCE(r.Problema, '') AS Problema,
+    p.Status                AS Status,
+    p.FechaInicio           AS FechaInicio,
+    p.FechaFin              AS FechaFin
   FROM produccion p
   JOIN usuarios  u ON u.IDContrato = p.IDContrato
   LEFT JOIN reportes r ON r.IDReporte = p.IDReporte
   /** filtro **/
-  /** order **/
+  ORDER BY (p.Status='En camino') DESC, (p.Status='Completado') DESC, p.IDReporte DESC
 ";
-if ($idContrato !== null) {
+
+if ($idContrato !== null && $idContrato !== '') {
   $sql = str_replace('/** filtro **/', "WHERE p.IDContrato = ?", $sql);
+  $types = "s"; $params = [$idContrato];
 } else {
   $sql = str_replace('/** filtro **/', "WHERE p.IDTec = ?", $sql);
+  $types = "i"; $params = [$idTec];
 }
-$sql = str_replace('/** order **/', "ORDER BY (p.Status='En camino') DESC, (p.Status='Completado') DESC, p.IDReporte DESC", $sql);
 
 $stmt = $mysqli->prepare($sql);
-if ($idContrato !== null) {
-  $stmt->bind_param("s", $idContrato);
-} else {
-  $stmt->bind_param("i", $idTec);
+if (!$stmt) {
+  json_fail(500, 'Prepare falló', $mysqli->error);
 }
-$stmt->execute();
+if (!$stmt->bind_param($types, ...$params)) {
+  json_fail(500, 'bind_param falló', $stmt->error);
+}
+if (!$stmt->execute()) {
+  json_fail(500, 'Execute falló', $stmt->error);
+}
 $res = $stmt->get_result();
+if (!$res) {
+  json_fail(500, 'get_result falló', $stmt->error);
+}
 
 $out = [];
 while ($row = $res->fetch_assoc()) {
   $out[] = [
-    "id"        => (int)$row["id"],
-    "cliente"   => $row["cliente"],
-    "contrato"  => $row["contrato"],
-    "direccion" => limpiar_direccion($row["direccion"]),
-    "orden"     => $row["orden"],
-    "estatus"   => $row["estatus"],     // 'En camino' | 'Completado' | 'Cancelado'
-    "inicio"    => $row["fecha_inicio"],// ISO o null
-    "fin"       => $row["fecha_fin"],   // ISO o null
+    // Claves que tu app espera (y tu Ruta.fromMap admite flexible)
+    "IDReporte"   => (int)$row["IDReporte"],
+    "cliente"     => $row["Nombre"]     ?? '',
+    "contrato"    => $row["IDContrato"] ?? '',
+    "direccion"   => limpiar_direccion($row["Direccion"] ?? ''),
+    "orden"       => $row["Problema"]   ?? '',
+    "status"      => $row["Status"]     ?? '',
+    "FechaInicio" => $row["FechaInicio"],
+    "FechaFin"    => $row["FechaFin"],
   ];
 }
 
