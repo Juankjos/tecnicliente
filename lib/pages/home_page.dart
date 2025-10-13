@@ -1,14 +1,18 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart' as gc; // 👈 geocoding nativo
 
 import '../widgets/top_menu.dart';
 import '../state/destination_state.dart';
 import 'package:mi_app/widgets/route_polyline_layer.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import '../services/rutas_api.dart';
-
+import '../models/ruta.dart';
 // ---- Ajusta tu base según entorno (igual que en rutas_page.dart)
 const String _BASE_WEB = "http://localhost/tecnicliente";   // Web
 const String _BASE_EMU = "http://10.0.2.2/tecnicliente";    // Android emulator
@@ -26,10 +30,10 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final MapController _mapController = MapController();
   final RutasApi _api = RutasApi(_apiUri);
-  // Estado del mapa
+
   bool _mapReady = false;
   LatLng? _pendingDest;
 
@@ -40,24 +44,44 @@ class _HomePageState extends State<HomePage> {
   // Marcadores (destino y/o mi ubicación)
   final List<Marker> _markers = [];
 
+  // 🔄 Bootstrap/refresh flag
+  bool _syncing = false;
+
   @override
   void initState() {
     super.initState();
 
+    // 👇 registra el observer
+    WidgetsBinding.instance.addObserver(this);
+
     // Escuchar el destino publicado desde RutasPage
     DestinationState.instance.selected.addListener(_onDestinationChanged);
 
-    // (Opcional) Intentar centrar en mi ubicación al iniciar
+    // Intentar centrar en mi ubicación
     _initMyLocation();
+
+    // Bootstrap: sincroniza al abrir
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bootstrapSync();
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     DestinationState.instance.selected.removeListener(_onDestinationChanged);
     super.dispose();
   }
 
-  Future<void> _onCompleteRoutePressed() async {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _bootstrapSync();
+    }
+  }
+
+  //RESYNC DE RUTAS
+   Future<void> _onCompleteRoutePressed() async {
     final contratoActual = DestinationState.instance.contract.value;
     final idReporte      = DestinationState.instance.reportId.value;
 
@@ -126,15 +150,13 @@ class _HomePageState extends State<HomePage> {
     );
 
     try {
-      // 🔥 Persistir en BD: Status=Completado + FechaFin=NOW (desde app)
       await _api.cambiarEstatus(
         idReporte: idReporte,
         status: 'Completado',
         fechaFin: DateTime.now(),
       );
 
-      // Limpia la UI local: borra destino y marcador
-      DestinationState.instance.set(null);
+      DestinationState.instance.set(null); // limpia destino
       _markers.removeWhere((m) => m.key == const ValueKey('destino'));
 
       if (mounted) Navigator.of(context).pop(); // cierra loader
@@ -156,6 +178,122 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _bootstrapSync() async {
+    if (_syncing) return;
+    _syncing = true;
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    try {
+      final rutas = await _api.fetchPorTecnico(106);
+      final enCamino = rutas.where((r) => r.estatus == RutaStatus.enCamino).toList();
+
+      if (enCamino.isNotEmpty) {
+        final r = enCamino.first;
+
+        final alreadySame =
+            DestinationState.instance.contract.value == r.contrato &&
+            DestinationState.instance.selected.value != null;
+
+        if (!alreadySame) {
+          await _restoreDestination(r);
+        }
+
+        if (mounted) {
+          Navigator.of(context).pop(); // cierra loader
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Actualizado: ruta en curso (Contrato ${r.contrato})')),
+          );
+        }
+      } else {
+        if (mounted) Navigator.of(context).pop(); // cierra loader
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // cierra loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudo actualizar información: $e')),
+        );
+      }
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  /// Geocodifica la dirección y publica el destino en DestinationState
+  Future<void> _restoreDestination(Ruta r) async {
+    final LatLng coords = await _geocodeAddress(r.direccion);
+
+    DestinationState.instance.setWithDetails(
+      coords,
+      address: r.direccion, // si quieres, aquí puedes poner la "display_name" del geocoder web
+      contract: r.contrato,
+      client: r.cliente,
+      reportId: r.id,       // 👈 MUY IMPORTANTE para completar/cancelar
+    );
+
+    if (_mapReady) {
+      _mapController.move(coords, 16);
+    } else {
+      _pendingDest = coords;
+    }
+
+    _markers.removeWhere((m) => m.key == const ValueKey('destino'));
+    _markers.add(
+      Marker(
+        key: const ValueKey('destino'),
+        point: coords,
+        width: 48,
+        height: 48,
+        child: const Icon(Icons.location_pin, size: 48, color: Colors.red),
+      ),
+    );
+
+    if (mounted) setState(() {});
+  }
+
+  Future<LatLng> _geocodeAddress(String raw) async {
+    if (!kIsWeb) {
+      try {
+        final list = await gc.locationFromAddress(raw);
+        if (list.isNotEmpty) {
+          final loc = list.first;
+          return LatLng(loc.latitude, loc.longitude);
+        }
+      } catch (_) {}
+      return _center; // fallback
+    } else {
+      try {
+        final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+          'q': raw,
+          'format': 'jsonv2',
+          'limit': '1',
+          'addressdetails': '0',
+          'accept-language': 'es',
+          'countrycodes': 'mx',
+        });
+        final headers = {'User-Agent': 'TVC-Rutas/1.0 (tvc.s34rch@gmail.com)'};
+        final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
+        if (res.statusCode == 200) {
+          final arr = (json.decode(res.body) as List?) ?? [];
+          if (arr.isNotEmpty) {
+            final m = arr.first as Map<String, dynamic>;
+            final lat = double.tryParse('${m['lat']}') ?? _center.latitude;
+            final lon = double.tryParse('${m['lon']}') ?? _center.longitude;
+            return LatLng(lat, lon);
+          }
+        }
+      } catch (_) {}
+      return _center; // fallback
+    }
+  }
+
   Future<void> _initMyLocation() async {
     try {
       var perm = await Geolocator.checkPermission();
@@ -171,7 +309,7 @@ class _HomePageState extends State<HomePage> {
         if (_mapReady) {
           _mapController.move(_center, _zoom);
         } else {
-          _pendingDest = _center; // si aún no está listo, lo aplicamos al ready
+          _pendingDest = _center;
         }
         if (mounted) setState(() {});
       }
