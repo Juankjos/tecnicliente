@@ -6,6 +6,16 @@ import 'package:geolocator/geolocator.dart';
 import '../widgets/top_menu.dart';
 import '../state/destination_state.dart';
 import 'package:mi_app/widgets/route_polyline_layer.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import '../services/rutas_api.dart';
+
+// ---- Ajusta tu base según entorno (igual que en rutas_page.dart)
+const String _BASE_WEB = "http://localhost/tecnicliente";   // Web
+const String _BASE_EMU = "http://10.0.2.2/tecnicliente";    // Android emulator
+Uri _apiUri(String pathWithQuery) {
+  final base = kIsWeb ? _BASE_WEB : _BASE_EMU;
+  return Uri.parse('$base/$pathWithQuery');
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,7 +28,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final MapController _mapController = MapController();
-
+  final RutasApi _api = RutasApi(_apiUri);
   // Estado del mapa
   bool _mapReady = false;
   LatLng? _pendingDest;
@@ -45,6 +55,105 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     DestinationState.instance.selected.removeListener(_onDestinationChanged);
     super.dispose();
+  }
+
+  Future<void> _onCompleteRoutePressed() async {
+    final contratoActual = DestinationState.instance.contract.value;
+    final idReporte      = DestinationState.instance.reportId.value;
+
+    if (contratoActual == null || idReporte == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No hay ruta activa con contrato e ID válidos.')),
+        );
+      }
+      return;
+    }
+
+    final controller = TextEditingController();
+    bool matches = false;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('COMPLETAR RUTA'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('¿Estás seguro que quieres completar la ruta?'),
+              const SizedBox(height: 10),
+              Text('Contrato: $contratoActual', style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Escribe el contrato para confirmar',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (v) {
+                  setState(() {
+                    matches = v.trim() == contratoActual.trim();
+                  });
+                },
+              ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: matches ? () => Navigator.of(ctx).pop(true) : null,
+              child: const Text('Sí, llegué al destino.'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancelar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Loader breve
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // 🔥 Persistir en BD: Status=Completado + FechaFin=NOW (desde app)
+      await _api.cambiarEstatus(
+        idReporte: idReporte,
+        status: 'Completado',
+        fechaFin: DateTime.now(),
+      );
+
+      // Limpia la UI local: borra destino y marcador
+      DestinationState.instance.set(null);
+      _markers.removeWhere((m) => m.key == const ValueKey('destino'));
+
+      if (mounted) Navigator.of(context).pop(); // cierra loader
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ruta completada. ¡Buen trabajo!'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(milliseconds: 3000),
+        ),
+      );
+    } catch (e) {
+      if (mounted) Navigator.of(context).pop(); // cierra loader
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo completar la ruta: $e')),
+      );
+    }
   }
 
   Future<void> _initMyLocation() async {
@@ -372,6 +481,14 @@ class _HomePageState extends State<HomePage> {
 
           // Solo si hay una ruta seleccionada
           if (DestinationState.instance.selected.value != null) ...[
+            const SizedBox(height: 10),
+            FloatingActionButton.extended(
+              heroTag: 'complete',
+              onPressed: _onCompleteRoutePressed,
+              label: const Text('Completar'),
+              icon: const Icon(Icons.flag),
+              backgroundColor: const Color.fromARGB(255, 136, 196, 255),
+            ),
             const SizedBox(height: 10),
             FloatingActionButton.extended(
               heroTag: 'clear',

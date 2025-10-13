@@ -193,6 +193,7 @@ class _RutasPageState extends State<RutasPage> {
           address: best.label,
           contract: r.contrato,
           client: r.cliente,
+          reportId: r.id, 
         );
       } else {
         final list = await gc.locationFromAddress(r.direccion);
@@ -203,6 +204,7 @@ class _RutasPageState extends State<RutasPage> {
           address: r.direccion,
           contract: r.contrato,
           client: r.cliente,
+          reportId: r.id, 
         );
       }
       // Opcional: mensajito silencioso
@@ -497,6 +499,7 @@ class _RutasPageState extends State<RutasPage> {
           address: chosen.label,
           contract: r.contrato,
           client: r.cliente,
+          reportId: r.id, 
         );
 
         await _persistirEnCamino(r);
@@ -524,6 +527,7 @@ class _RutasPageState extends State<RutasPage> {
           address: r.direccion,
           contract: r.contrato,
           client: r.cliente,
+          reportId: r.id, 
         );
 
         await _persistirEnCamino(r);

@@ -17,6 +17,8 @@ class DestinationState {
   /// Cliente de la ruta seleccionada
   final ValueNotifier<String?> client = ValueNotifier<String?>(null);
 
+  final ValueNotifier<int?> reportId    = ValueNotifier<int?>(null);
+
   bool get hasSelection => selected.value != null;
 
   /// Compatibilidad con tu código existente
@@ -28,11 +30,13 @@ class DestinationState {
     String? address,
     String? contract,
     String? client,
+    int? reportId, 
   }) {
     selected.value = value;
     this.address.value = address;
     this.contract.value = contract;
     this.client.value = client;
+    this.reportId.value = reportId;
   }
 
   /// Limpia todo
