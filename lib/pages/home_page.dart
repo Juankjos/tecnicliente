@@ -391,7 +391,6 @@ class _HomePageState extends State<HomePage> {
         ),
         title: const Text('TecniCliente'),
         actions: [
-          // 👇 Botón de texto "Ver ruta actual"
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: TextButton(
@@ -472,11 +471,11 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          FloatingActionButton.extended(
+          FloatingActionButton(
             heroTag: 'me',
             onPressed: _centerOnMyLocation,
-            label: const Text('Mi ubicación'),
-            icon: const Icon(Icons.my_location),
+            backgroundColor: const Color.fromARGB(255, 136, 196, 255),
+            child: const Icon(Icons.my_location),
           ),
 
           // Solo si hay una ruta seleccionada
@@ -485,9 +484,10 @@ class _HomePageState extends State<HomePage> {
             FloatingActionButton.extended(
               heroTag: 'complete',
               onPressed: _onCompleteRoutePressed,
-              label: const Text('Completar'),
+              label: const Text('Completar ruta'),
               icon: const Icon(Icons.flag),
-              backgroundColor: const Color.fromARGB(255, 136, 196, 255),
+              foregroundColor: Colors.white,
+              backgroundColor: const Color.fromARGB(255, 45, 129, 48),
             ),
             const SizedBox(height: 10),
             FloatingActionButton.extended(
@@ -495,6 +495,8 @@ class _HomePageState extends State<HomePage> {
               onPressed: _onClearRoutePressed,
               label: const Text('Cancelar ruta'),
               icon: const Icon(Icons.clear),
+              foregroundColor: Colors.white,
+              backgroundColor: const Color.fromARGB(255, 178, 28, 28),
             ),
           ],
         ],
