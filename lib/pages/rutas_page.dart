@@ -120,44 +120,100 @@ class _RutasPageState extends State<RutasPage> {
     });
   }
 
+  Ruta? _enCaminoActual;     // la ruta que viene En Camino desde el server
+  int? _rutaBloqueadaId;     // id de la ruta que bloquea la selección
+  bool get _hasBloqueo => _rutaBloqueadaId != null;
+
   // FETCH de rutas (por técnico o contrato)
-  Future<void> _cargarRutas() async {
-    setState(() => _cargando = true);
-    try {
-      var rutas = await _api.fetchPorTecnico(106);  // <-- var (no final)
+    Future<void> _cargarRutas() async {
+      setState(() => _cargando = true);
+      try {
+        var rutas = await _api.fetchPorTecnico(106);
 
-      // Si hay una ruta activa en memoria, refleja 'En Camino' visualmente
-      final activeContract = DestinationState.instance.contract.value;
-      if (activeContract != null) {
-        rutas = rutas.map((x) {
-          if (x.contrato == activeContract && x.estatus == RutaStatus.pendiente) {
-            return Ruta(
-              id: x.id,
-              cliente: x.cliente,
-              contrato: x.contrato,
-              direccion: x.direccion,
-              orden: x.orden,
-              estatus: RutaStatus.enCamino,
-              fechaHoraInicio: x.fechaHoraInicio ?? DateTime.now(),
-              fechaHoraFin: x.fechaHoraFin,
-            );
+        // Respeta una ruta publicada en memoria: si estaba Pendiente, muéstrala como En Camino
+        final activeContract = DestinationState.instance.contract.value;
+        if (activeContract != null) {
+          rutas = rutas.map((x) {
+            if (x.contrato == activeContract && x.estatus == RutaStatus.pendiente) {
+              return Ruta(
+                id: x.id,
+                cliente: x.cliente,
+                contrato: x.contrato,
+                direccion: x.direccion,
+                orden: x.orden,
+                estatus: RutaStatus.enCamino,
+                fechaHoraInicio: x.fechaHoraInicio ?? DateTime.now(),
+                fechaHoraFin: x.fechaHoraFin,
+              );
+            }
+            return x;
+          }).toList();
+        }
+
+        // 🔎 Detecta si el servidor ya tiene una ruta En camino
+        final enCamino = rutas.where((r) => r.estatus == RutaStatus.enCamino).toList();
+        _enCaminoActual = enCamino.isNotEmpty ? enCamino.first : null;
+        _rutaBloqueadaId = _enCaminoActual?.id; // ← activa el bloqueo si no es null
+
+        setState(() {
+          _todas = rutas;
+          _cargando = false;
+        });
+
+        // ♻️ Restaura el destino en el mapa si hay En camino en servidor
+        if (_enCaminoActual != null) {
+          final alreadySame =
+              DestinationState.instance.contract.value == _enCaminoActual!.contrato &&
+              DestinationState.instance.address.value != null;
+
+          if (!alreadySame) {
+            await _restaurarDestinoDesdeServidor(_enCaminoActual!);
           }
-          return x;
-        }).toList();
+        }
+      } catch (e) {
+        setState(() => _cargando = false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No se pudieron cargar las rutas: $e')),
+        );
       }
+    }
 
-      setState(() {
-        _todas = rutas;
-        _cargando = false;
-      });
-    } catch (e) {
-      setState(() => _cargando = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudieron cargar las rutas: $e')),
-      );
+    Future<void> _restaurarDestinoDesdeServidor(Ruta r) async {
+    // Para web usamos OSM; para móvil, geocoding nativo
+    const proximity = (20.8169, -102.7635);
+
+    try {
+      if (kIsWeb) {
+        final results = await _geocodeOSM(r.direccion, proximity: proximity);
+        if (results.isEmpty) return;
+        final best = results.first; // toma el mejor match
+        DestinationState.instance.setWithDetails(
+          LatLng(best.lat, best.lon),
+          address: best.label,
+          contract: r.contrato,
+          client: r.cliente,
+        );
+      } else {
+        final list = await gc.locationFromAddress(r.direccion);
+        if (list.isEmpty) return;
+        final loc = list.first;
+        DestinationState.instance.setWithDetails(
+          LatLng(loc.latitude, loc.longitude),
+          address: r.direccion,
+          contract: r.contrato,
+          client: r.cliente,
+        );
+      }
+      // Opcional: mensajito silencioso
+      // if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+      //   const SnackBar(content: Text('Ruta en curso restaurada')),
+      // );
+    } catch (_) {
+      // Silencioso: si falla la geocodificación no rompemos la UI
     }
   }
+
 
 
   // FILTRO DE RUTAS
@@ -245,8 +301,19 @@ class _RutasPageState extends State<RutasPage> {
               if (_hasRutaActiva) ...[
                 const SizedBox(height: 8),
                 const Text(
-                  'RUTA EN CURSO: Cancela o Completa tu ruta para seleccionar otra.',
+                  ' RUTA EN CURSO ',
                   style: TextStyle(backgroundColor: Colors.redAccent, color: Colors.white, fontWeight: FontWeight.w500),
+                ),
+              ],
+              if (_hasBloqueo) ...[
+                const SizedBox(height: 8),
+                Text(
+                  ' Contrato ${_enCaminoActual?.contrato} Dirigiéndose a: ${_enCaminoActual?.direccion} ',
+                  style: const TextStyle(
+                    backgroundColor: Colors.blue,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ]),
@@ -262,7 +329,10 @@ class _RutasPageState extends State<RutasPage> {
                 itemBuilder: (context, index) {
                   final r = filtradas[index];
                   final isSelected = _seleccionId == r.id;
-                  final enabled = !_hasRutaActiva && r.estatus != RutaStatus.completada;
+                  final bloqueo = _hasBloqueo;               // hay una ruta en camino en servidor
+                  final enabled = (!bloqueo && !_hasRutaActiva && r.estatus != RutaStatus.completada)
+                      // si hay bloqueo, solo dejamos interactuar (opcional) con la misma ruta
+                      || (bloqueo && _rutaBloqueadaId == r.id);
 
                   return RutaTile(
                     r: r,
@@ -276,7 +346,17 @@ class _RutasPageState extends State<RutasPage> {
                       final confirmar = await _confirmarSeleccion(context, r);
                       if (confirmar == true) {
                         setState(() => _seleccionId = r.id);
+                        // 1) Geocodifica y publica destino (tu método actual)
                         await _geocodificarYEnviar(r);
+                        // 2) Persiste En camino en BD (si era Pendiente)
+                        await _persistirEnCamino(r);
+                        // 3) 🔒 Activa bloqueo en UI (aunque refrescarás abajo)
+                        setState(() {
+                          _rutaBloqueadaId = r.id;
+                          _enCaminoActual = r;
+                        });
+                        // 4) (recomendado) Refresca desde el servidor para ver estatus y hora reales
+                        await _cargarRutas();
                       }
                     } : null,
                   );
@@ -294,7 +374,7 @@ class _RutasPageState extends State<RutasPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Ruta en curso'),
-        content: const Text('Ya tienes una ruta activa. Cancélala en el mapa con “Limpiar ruta” antes de seleccionar otra.'),
+        content: const Text('Tienes una ruta activa. Completa o Cancela en el mapa.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cerrar')),
           FilledButton.tonal(
