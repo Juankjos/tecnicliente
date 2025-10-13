@@ -81,7 +81,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   //RESYNC DE RUTAS
-   Future<void> _onCompleteRoutePressed() async {
+  Future<void> _onCompleteRoutePressed() async {
     final contratoActual = DestinationState.instance.contract.value;
     final idReporte      = DestinationState.instance.reportId.value;
 
@@ -208,7 +208,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (mounted) {
           Navigator.of(context).pop(); // cierra loader
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Actualizado: ruta en curso (Contrato ${r.contrato})')),
+            SnackBar(content: Text('Actualizado: ruta en curso ${r.direccion}')),
           );
         }
       } else {
@@ -527,7 +527,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           padding: const EdgeInsets.only(left: 12),
           child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
         ),
-        title: const Text('TecniCliente'),
+        title: const Text('Rutas Técnico'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 4),

@@ -303,14 +303,14 @@ class _RutasPageState extends State<RutasPage> {
               if (_hasRutaActiva) ...[
                 const SizedBox(height: 8),
                 const Text(
-                  ' RUTA EN CURSO ',
+                  ' RUTA EN CURSO.',
                   style: TextStyle(backgroundColor: Colors.redAccent, color: Colors.white, fontWeight: FontWeight.w500),
                 ),
               ],
               if (_hasBloqueo) ...[
                 const SizedBox(height: 8),
                 Text(
-                  ' Contrato ${_enCaminoActual?.contrato} Dirigiéndose a: ${_enCaminoActual?.direccion} ',
+                  ' Contrato ${_enCaminoActual?.contrato} Dirigiéndose a: ${_enCaminoActual?.direccion}.',
                   style: const TextStyle(
                     backgroundColor: Colors.blue,
                     color: Colors.white,
@@ -332,11 +332,11 @@ class _RutasPageState extends State<RutasPage> {
                   final r = filtradas[index];
                   final isSelected = _seleccionId == r.id;
                   final bloqueo = _hasBloqueo;               // hay una ruta en camino en servidor
-                  final enabled = (!bloqueo && !_hasRutaActiva && r.estatus != RutaStatus.completada)
-                      // si hay bloqueo, solo dejamos interactuar (opcional) con la misma ruta
-                      || (bloqueo && _rutaBloqueadaId == r.id);
+                  final enabled = r.estatus == RutaStatus.pendiente
+                      && !_hasRutaActiva
+                      && (!bloqueo || _rutaBloqueadaId == r.id);
 
-                  return RutaTile(
+                  Widget tile = RutaTile(
                     r: r,
                     isSelected: isSelected,
                     enabled: enabled,
@@ -362,6 +362,15 @@ class _RutasPageState extends State<RutasPage> {
                       }
                     } : null,
                   );
+                  if (r.estatus != RutaStatus.pendiente) {
+                    tile = AbsorbPointer(
+                      absorbing: true,
+                      child: Opacity(
+                        opacity: 0.75, // dale un look apagado similar a “bloqueado”
+                        child: tile,
+                      ),
+                    );
+                  }return tile;
                 },
               ),
             ),

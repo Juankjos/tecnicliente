@@ -25,10 +25,19 @@ class RutaTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
+    Color bg;
+      if (r.estatus == RutaStatus.completada) {
+        bg = Colors.green.shade100;
+      } else if (r.estatus == RutaStatus.enCamino) {
+        bg = Colors.blue.shade100; // ← azul para En Camino
+      } else {
+        bg = Colors.white; // Pendiente
+      }
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
       decoration: BoxDecoration(
-        color: r.estatus == RutaStatus.completada ? Colors.green.shade100 : Colors.white,
+        color: bg, // ← aplica color según estatus
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           width: isSelected ? 2.2 : 1,
@@ -57,7 +66,7 @@ class RutaTile extends StatelessWidget {
                 label: 'Inicio',
                 value: _formatFechaHora(r.fechaHoraInicio!),
                 bg: const Color.fromARGB(255, 143, 230, 149),
-                fg: const Color.fromARGB(255, 18, 143, 32),
+                fg: const Color.fromARGB(255, 12, 114, 24),
               ),
             if (r.estatus == RutaStatus.completada && r.fechaHoraFin != null)
               PillBadge(
@@ -68,7 +77,9 @@ class RutaTile extends StatelessWidget {
               ),
           ]),
         ),
-        trailing: isSelected ? const Icon(Icons.check_circle, size: 28) : const Icon(Icons.chevron_right),
+        trailing: enabled
+            ? (isSelected ? const Icon(Icons.check_circle, size: 28) : const Icon(Icons.chevron_right))
+            : const Icon(Icons.lock_outline),
         isThreeLine: true,
         enabled: enabled,
         onTap: enabled ? onTap : null,
