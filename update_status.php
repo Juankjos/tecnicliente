@@ -5,7 +5,6 @@ header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json; charset=utf-8');
 
-// Preflight CORS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(204);
     exit;
@@ -33,95 +32,126 @@ $mysqli = @new mysqli($host, $user, $pass, $db);
 if ($mysqli->connect_errno) fail(500, 'Error de conexión', $mysqli->connect_error);
 $mysqli->set_charset('utf8mb4');
 
-// Leer POST
-$idReporte     = isset($_POST['idReporte'])   ? intval($_POST['idReporte']) : 0;
-$statusNuevo   = isset($_POST['status'])      ? trim($_POST['status'])      : '';
-$fechaInicioReq= isset($_POST['fechaInicio']) ? trim($_POST['fechaInicio']) : null;
-$fechaFin      = isset($_POST['fechaFin'])    ? trim($_POST['fechaFin'])    : null;
-$comentario    = isset($_POST['comentario'])  ? trim($_POST['comentario'])  : null;
-$rate          = isset($_POST['rate'])        ? intval($_POST['rate'])      : null;
+// --- Leer POST ---
+$idReporte      = isset($_POST['idReporte'])   ? intval($_POST['idReporte']) : 0;
+$statusNuevo    = isset($_POST['status'])      ? trim($_POST['status'])      : '';
+$fechaInicioReq = isset($_POST['fechaInicio']) ? trim($_POST['fechaInicio']) : null;
+$fechaFin       = isset($_POST['fechaFin'])    ? trim($_POST['fechaFin'])    : null;
+$comentario     = isset($_POST['comentario'])  ? trim($_POST['comentario'])  : null;
+$rate           = isset($_POST['rate'])        ? intval($_POST['rate'])      : null;
 
 if ($idReporte <= 0 || $statusNuevo === '') {
     fail(400, 'Faltan parámetros: idReporte y status');
 }
 
-// ⭐ Normaliza el status para comparar sin problemas de mayúsculas/acentos
 $norm = mb_strtolower($statusNuevo, 'UTF-8');
 
-// 1) Leer estado actual y FechaInicio
-$cur = $mysqli->prepare("SELECT Status, FechaInicio FROM produccion WHERE IDReporte = ?");
+// 1) Lee estado actual + FechaInicio + IDProd
+$cur = $mysqli->prepare("SELECT IDProd, Status, FechaInicio FROM produccion WHERE IDReporte = ?");
 if (!$cur) fail(500, 'Prepare (SELECT) falló', $mysqli->error);
 $cur->bind_param('i', $idReporte);
 if (!$cur->execute()) fail(500, 'Execute (SELECT) falló', $cur->error);
 $res = $cur->get_result();
-if (!$res || $res->num_rows === 0) fail(404, 'IDReporte no encontrado');
+if (!$res || $res->num_rows === 0) fail(404, 'IDReporte no encontrado en produccion');
 $row = $res->fetch_assoc();
+$idProd    = (int)$row['IDProd'];
 $curStatus = (string)($row['Status'] ?? '');
 $curInicio = $row['FechaInicio']; // puede ser null
 $cur->close();
 
-// ⭐ Idempotencia: si ya quedó Completado, no tocar (evitas pisar cierres)
+// Idempotencia: si ya está Completado, no toques
 if (mb_strtolower($curStatus, 'UTF-8') === 'completado') {
     echo json_encode(['ok' => true, 'skipped' => 'already_completed'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-// 2) Construir UPDATE
-$sets   = ['Status = ?'];   // siempre actualizamos Status
-$params = [$statusNuevo];
-$types  = 's';
+// 2) Transacción
+$mysqli->begin_transaction();
 
-// Lógica de FechaInicio solo al pasar a “En camino” por primera vez
-if ($norm === 'en camino') {
-    $yaEnCamino   = (mb_strtolower($curStatus, 'UTF-8') === 'en camino');
-    $inicioVacio  = ($curInicio === null || $curInicio === '');
-    if (!$yaEnCamino && $inicioVacio) {
-        if ($fechaInicioReq !== null && $fechaInicioReq !== '') {
-            $sets[]   = 'FechaInicio = ?';
-            $params[] = $fechaInicioReq;
-            $types   .= 's';
-        } else {
-            $sets[] = 'FechaInicio = NOW()';
+try {
+    // 2.a Construye UPDATE
+    $sets   = ['Status = ?'];
+    $params = [$statusNuevo];
+    $types  = 's';
+
+    // FechaInicio al primer paso a "En camino"
+    if ($norm === 'en camino') {
+        $yaEnCamino  = (mb_strtolower($curStatus, 'UTF-8') === 'en camino');
+        $inicioVacio = ($curInicio === null || $curInicio === '');
+        if (!$yaEnCamino && $inicioVacio) {
+            if ($fechaInicioReq !== null && $fechaInicioReq !== '') {
+                $sets[]   = 'FechaInicio = ?';
+                $params[] = $fechaInicioReq;
+                $types   .= 's';
+            } else {
+                $sets[] = 'FechaInicio = NOW()';
+            }
         }
     }
-}
 
-// ⭐ Si el nuevo estado es Cancelado o Completado, asegura FechaFin
-if ($norm === 'cancelado' || $norm === 'completado') {
-    if ($fechaFin !== null && $fechaFin !== '') {
-        $sets[]   = 'FechaFin = ?';
-        $params[] = $fechaFin;
-        $types   .= 's';
-    } else {
-        $sets[] = 'FechaFin = NOW()';
+    // FechaFin si Cancelado/Completado
+    if ($norm === 'cancelado' || $norm === 'completado') {
+        if ($fechaFin !== null && $fechaFin !== '') {
+            $sets[]   = 'FechaFin = ?';
+            $params[] = $fechaFin;
+            $types   .= 's';
+        } else {
+            $sets[] = 'FechaFin = NOW()';
+        }
     }
-}
 
-// Otros campos opcionales
-if ($comentario !== null && $comentario !== '') {
-    $sets[]   = 'Comentario = ?';
-    $params[] = $comentario;
-    $types   .= 's';
-}
-if ($rate !== null) {
-    $sets[]   = 'Rate = ?';
-    $params[] = $rate;
+    // Opcionales
+    if ($comentario !== null && $comentario !== '') {
+        $sets[]   = 'Comentario = ?';
+        $params[] = $comentario;
+        $types   .= 's';
+    }
+    if ($rate !== null) {
+        $sets[]   = 'Rate = ?';
+        $params[] = $rate;
+        $types   .= 'i';
+    }
+
+    $params[] = $idReporte;
     $types   .= 'i';
+
+    $sql = "UPDATE produccion SET " . implode(', ', $sets) . " WHERE IDReporte = ?";
+
+    $stmt = $mysqli->prepare($sql);
+    if (!$stmt) throw new Exception('Prepare (UPDATE) falló: ' . $mysqli->error);
+    if (!$stmt->bind_param($types, ...$params)) throw new Exception('bind_param (UPDATE) falló: ' . $stmt->error);
+    if (!$stmt->execute()) throw new Exception('Execute (UPDATE) falló: ' . $stmt->error);
+
+    // 2.b Si Cancelado => inserta en cancelados con IDProd (FK correcta)
+    $canceladosInserted = 0;
+    if ($norm === 'cancelado') {
+        $motivo = ($comentario !== null && $comentario !== '') ? $comentario : 'Cancelado sin motivo';
+        $ins = $mysqli->prepare("INSERT INTO cancelados (IDProd, Motivo) VALUES (?, ?)");
+        if (!$ins) throw new Exception('Prepare (INSERT cancelados) falló: ' . $mysqli->error);
+        if (!$ins->bind_param('is', $idProd, $motivo)) throw new Exception('bind_param (cancelados) falló: ' . $ins->error);
+        if (!$ins->execute()) throw new Exception('Execute (INSERT cancelados) falló: ' . $ins->error);
+        $canceladosInserted = $ins->affected_rows;
+        $ins->close();
+    }
+
+    $mysqli->commit();
+
+    echo json_encode([
+        'ok' => true,
+        'rows_updated' => $stmt->affected_rows,
+        'cancelados' => [
+            'attempted' => ($norm === 'cancelado'),
+            'inserted'  => ($canceladosInserted > 0),
+            'rows'      => $canceladosInserted,
+            'idProd'    => $idProd
+        ]
+    ], JSON_UNESCAPED_UNICODE);
+
+    $stmt->close();
+
+} catch (Throwable $ex) {
+    $mysqli->rollback();
+    fail(500, 'Transacción falló', $ex->getMessage());
 }
 
-// ⭐ Opcional: evita cambiar si ya está Completado (ya hicimos early-return arriba).
-//    Si quisieras reforzarlo en SQL: añade "AND Status <> 'Completado'" al WHERE.
-$params[] = $idReporte;
-$types   .= 'i';
-
-$sql = "UPDATE produccion SET " . implode(', ', $sets) . " WHERE IDReporte = ?";
-
-$stmt = $mysqli->prepare($sql);
-if (!$stmt) fail(500, 'Prepare (UPDATE) falló', $mysqli->error);
-if (!$stmt->bind_param($types, ...$params)) fail(500, 'bind_param falló', $stmt->error);
-if (!$stmt->execute()) fail(500, 'Execute (UPDATE) falló', $stmt->error);
-
-echo json_encode(['ok' => true, 'rows' => $stmt->affected_rows], JSON_UNESCAPED_UNICODE);
-
-$stmt->close();
 $mysqli->close();

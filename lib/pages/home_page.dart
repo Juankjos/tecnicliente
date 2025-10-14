@@ -435,7 +435,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
 
-    final controller = TextEditingController();
+    final contratoCtrl = TextEditingController();
+    final motivoCtrl   = TextEditingController();
     bool matches = false;
 
     final confirmed = await showDialog<bool>(
@@ -453,13 +454,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Text('Contrato: $contratoActual', style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               TextField(
-                controller: controller,
+                controller: contratoCtrl,
                 decoration: const InputDecoration(
                   labelText: 'Escribe el contrato',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),
                 onChanged: (v) => setState(() => matches = v.trim() == contratoActual.trim()),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: motivoCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Motivo (opcional)',
+                  hintText: 'Ej. cliente no estaba, equipo fuera',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                maxLines: 2,
               ),
             ],
           ),
@@ -475,11 +487,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
 
     if (confirmed == true) {
-      _doCancelRoute(); // <-- aquí
+      final motivo = motivoCtrl.text.trim();
+      await _doCancelRoute(motivo: motivo.isEmpty ? null : motivo);
     }
   }
 
-  Future<void> _doCancelRoute() async {
+  Future<void> _doCancelRoute({String? motivo}) async {
     final idReporte = DestinationState.instance.reportId.value;
 
     if (idReporte == null) {
@@ -506,6 +519,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         idReporte: idReporte,
         status: 'Cancelado',
         fechaFin: DateTime.now(),
+        comentario: (motivo != null && motivo.trim().isNotEmpty) ? motivo.trim() : null,
       );
 
       // Limpia estado local del mapa y destino
