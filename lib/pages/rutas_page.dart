@@ -130,31 +130,10 @@ class _RutasPageState extends State<RutasPage> {
       try {
         var rutas = await _api.fetchPorTecnico(106);
 
-        // Respeta una ruta publicada en memoria: si estaba Pendiente, muéstrala como En Camino
-        final activeContract = DestinationState.instance.contract.value;
-        if (activeContract != null) {
-          rutas = rutas.map((x) {
-            if (x.contrato == activeContract && x.estatus == RutaStatus.pendiente) {
-              return Ruta(
-                id: x.id,
-                cliente: x.cliente,
-                contrato: x.contrato,
-                direccion: x.direccion,
-                orden: x.orden,
-                estatus: RutaStatus.enCamino,
-                fechaHoraInicio: x.fechaHoraInicio ?? DateTime.now(),
-                fechaHoraFin: x.fechaHoraFin,
-              );
-            }
-            return x;
-          }).toList();
-        }
-
         // 🔎 Detecta si el servidor ya tiene una ruta En camino
         final enCamino = rutas.where((r) => r.estatus == RutaStatus.enCamino).toList();
         _enCaminoActual = enCamino.isNotEmpty ? enCamino.first : null;
-        _rutaBloqueadaId = _enCaminoActual?.id; // ← activa el bloqueo si no es null
-
+        _rutaBloqueadaId = _enCaminoActual?.id;
         setState(() {
           _todas = rutas;
           _cargando = false;
@@ -162,12 +141,15 @@ class _RutasPageState extends State<RutasPage> {
 
         // ♻️ Restaura el destino en el mapa si hay En camino en servidor
         if (_enCaminoActual != null) {
-          final alreadySame =
-              DestinationState.instance.contract.value == _enCaminoActual!.contrato &&
-              DestinationState.instance.address.value != null;
-
-          if (!alreadySame) {
+          final yaCoincide = DestinationState.instance.contract.value == _enCaminoActual!.contrato
+                            && DestinationState.instance.address.value != null;
+          if (!yaCoincide) {
             await _restaurarDestinoDesdeServidor(_enCaminoActual!);
+          }
+        } else {
+          // No hay ruta en camino en servidor -> limpiamos mapa/estado local
+          if (DestinationState.instance.selected.value != null) {
+            DestinationState.instance.set(null);
           }
         }
       } catch (e) {
