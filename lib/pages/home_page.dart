@@ -391,7 +391,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (addr == null || addr.trim().isEmpty || dest == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No hay ruta seleccionada hasta el momento'),
+          content: Text('No hay ruta seleccionada hasta el momento.'),
           behavior: SnackBarBehavior.floating,
           duration: Duration(milliseconds: 1800),
         ),
@@ -419,7 +419,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _onClearRoutePressed() async {
     final contratoActual = DestinationState.instance.contract.value;
 
-    // Si por alguna razón no hay contrato, usa confirmación simple
     if (contratoActual == null || contratoActual.trim().isEmpty) {
       final simple = await showDialog<bool>(
         context: context,
@@ -427,18 +426,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           title: const Text('Confirmar'),
           content: const Text('¿Estás seguro que quieres cancelar la ruta?'),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('No, SEGUIR'),
-            ),
-            FilledButton.tonal(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Sí, limpiar ruta'),
-            ),
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('No, SEGUIR')),
+            FilledButton.tonal(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Sí, cancelar')),
           ],
         ),
       );
-      if (simple == true) _doClearRoute();
+      if (simple == true) _doCancelRoute(); // <-- aquí
       return;
     }
 
@@ -456,14 +449,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text('¿Estás seguro que quieres cancelar la ruta?'),
-              Text(
-                'EL CLIENTE SERÁ NOTIFICADO',
-                style: const TextStyle(fontWeight: FontWeight.w700),),
               const SizedBox(height: 10),
-              Text(
-                'Contrato: $contratoActual',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
+              Text('Contrato: $contratoActual', style: const TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               TextField(
                 controller: controller,
@@ -472,47 +459,92 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),
-                onChanged: (v) {
-                  setState(() {
-                    matches = v.trim() == contratoActual.trim();
-                  });
-                },
+                onChanged: (v) => setState(() => matches = v.trim() == contratoActual.trim()),
               ),
             ],
           ),
           actions: [
             FilledButton.tonal(
               onPressed: matches ? () => Navigator.of(ctx).pop(true) : null,
-              child: const Text('Sí, limpiar ruta'),
+              child: const Text('Sí, cancelar'),
             ),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('No, SEGUIR'),
-            ),
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('No, SEGUIR')),
           ],
         ),
       ),
     );
 
     if (confirmed == true) {
-      _doClearRoute();
+      _doCancelRoute(); // <-- aquí
     }
   }
 
-  void _doClearRoute() {
-    DestinationState.instance.set(null); // limpia coords + address + contrato + cliente
-    _markers.removeWhere((m) => m.key == const ValueKey('destino'));
+  Future<void> _doCancelRoute() async {
+    final idReporte = DestinationState.instance.reportId.value;
 
-    if (mounted) setState(() {});
+    if (idReporte == null) {
+      // Si por alguna razón no tenemos id, sólo limpia UI (pero lo ideal es siempre setear reportId)
+      DestinationState.instance.set(null);
+      _markers.removeWhere((m) => m.key == const ValueKey('destino'));
+      if (mounted) setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ruta cancelada (sin ID de reporte).')),
+      );
+      return;
+    }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Ruta cancelada, EL CLIENTE SERÁ NOTIFICADO.'),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(milliseconds: 4000),
-      ),
+    // Loader
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
     );
+
+    try {
+      // 🔥 Persistir en BD: Status=Cancelado + FechaFin=NOW
+      await _api.cambiarEstatus(
+        idReporte: idReporte,
+        status: 'Cancelado',
+        fechaFin: DateTime.now(),
+      );
+
+      // Limpia estado local del mapa y destino
+      DestinationState.instance.set(null);
+      _markers.removeWhere((m) => m.key == const ValueKey('destino'));
+
+      if (mounted) Navigator.of(context).pop(); // cierra loader
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ruta cancelada y registrada.'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(milliseconds: 3000),
+        ),
+      );
+    } catch (e) {
+      if (mounted) Navigator.of(context).pop(); // cierra loader
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cancelar la ruta: $e')),
+      );
+    }
   }
+
+  // void _doClearRoute() {
+  //   DestinationState.instance.set(null); // limpia coords + address + contrato + cliente
+  //   _markers.removeWhere((m) => m.key == const ValueKey('destino'));
+
+  //   if (mounted) setState(() {});
+
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     const SnackBar(
+  //       content: Text('Ruta cancelada, EL CLIENTE SERÁ NOTIFICADO.'),
+  //       behavior: SnackBarBehavior.floating,
+  //       duration: Duration(milliseconds: 4000),
+  //     ),
+  //   );
+  // }
 
   @override
   Widget build(BuildContext context) {

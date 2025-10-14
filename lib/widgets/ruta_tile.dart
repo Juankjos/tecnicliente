@@ -29,26 +29,29 @@ class RutaTile extends StatelessWidget {
     Color bg;
       if (r.estatus == RutaStatus.completada) {
         bg = Colors.green.shade100;
+      } else if (r.estatus == RutaStatus.cancelado) {
+        bg = Colors.red.shade100;
       } else if (r.estatus == RutaStatus.enCamino) {
-        bg = Colors.blue.shade100; // ← azul para En Camino
+        bg = Colors.blue.shade50;
       } else {
-        bg = Colors.white; // Pendiente
+        bg = Colors.white;
       }
+      final bool showPills =
+        (r.estatus == RutaStatus.completada || r.estatus == RutaStatus.cancelado);
+
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
       decoration: BoxDecoration(
-        color: bg, // ← aplica color según estatus
+        color: bg,                          // 👈 usa el color elegido
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           width: isSelected ? 2.2 : 1,
-          color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey.shade300,
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Colors.grey.shade300,
         ),
       ),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: const Color.fromARGB(255, 246, 246, 246),
-          child: Text('${r.id}', style: const TextStyle(color: Color(0xFF085FB0), fontWeight: FontWeight.w700)),
-        ),
         title: Row(
           children: [
             Expanded(child: Text(r.cliente, style: const TextStyle(fontWeight: FontWeight.w600))),
@@ -61,21 +64,22 @@ class RutaTile extends StatelessWidget {
             InfoLine(label: 'Número de contrato', value: r.contrato),
             InfoLine(label: 'Dirección', value: r.direccion),
             InfoLine(label: 'Orden', value: r.orden),
-            if (r.estatus == RutaStatus.completada && r.fechaHoraInicio != null)
-              PillBadge(
-                label: 'Inicio',
-                value: _formatFechaHora(r.fechaHoraInicio!),
-                bg: const Color.fromARGB(255, 143, 230, 149),
-                fg: const Color.fromARGB(255, 12, 114, 24),
-              ),
-            if (r.estatus == RutaStatus.completada && r.fechaHoraFin != null)
-              PillBadge(
-                label: 'Terminación',
-                value: _formatFechaHora(r.fechaHoraFin!),
-                bg: Colors.red.shade100,
-                fg: Colors.red,
-              ),
-          ]),
+            if (showPills && r.fechaHoraInicio != null)
+                PillBadge(
+                  label: 'Inicio',
+                  value: _formatFechaHora(r.fechaHoraInicio!),
+                  bg: const Color.fromARGB(255, 143, 230, 149),
+                  fg: const Color.fromARGB(255, 12, 114, 24),
+                ),
+              if (showPills && r.fechaHoraFin != null)
+                PillBadge(
+                  label: 'Terminación',
+                  value: _formatFechaHora(r.fechaHoraFin!),
+                  bg: Colors.red.shade50,
+                  fg: Colors.red,
+                ),
+            ],
+          ),
         ),
         trailing: enabled
             ? (isSelected ? const Icon(Icons.check_circle, size: 28) : const Icon(Icons.chevron_right))

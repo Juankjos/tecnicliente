@@ -288,6 +288,14 @@ class _RutasPageState extends State<RutasPage> {
                       v ? _filtros.add(RutaStatus.completada) : _filtros.remove(RutaStatus.completada);
                     }),
                   ),
+                  FiltroChipX(
+                    label: 'Cancelado',
+                    selected: _filtros.contains(RutaStatus.cancelado),
+                    color: Colors.red,
+                    onSelected: (v) => setState(() {
+                      v ? _filtros.add(RutaStatus.cancelado) : _filtros.remove(RutaStatus.cancelado);
+                    }),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
@@ -331,10 +339,10 @@ class _RutasPageState extends State<RutasPage> {
                 itemBuilder: (context, index) {
                   final r = filtradas[index];
                   final isSelected = _seleccionId == r.id;
-                  final bloqueo = _hasBloqueo;               // hay una ruta en camino en servidor
-                  final enabled = r.estatus == RutaStatus.pendiente
-                      && !_hasRutaActiva
-                      && (!bloqueo || _rutaBloqueadaId == r.id);
+                  final bloqueo = _hasBloqueo;     
+                  final est = r.estatus;
+                  final enabled = (!bloqueo && !_hasRutaActiva && est != RutaStatus.completada && est != RutaStatus.cancelado)
+                    || (bloqueo && _rutaBloqueadaId == r.id);
 
                   Widget tile = RutaTile(
                     r: r,

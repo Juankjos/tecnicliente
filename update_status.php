@@ -34,16 +34,19 @@ if ($mysqli->connect_errno) fail(500, 'Error de conexión', $mysqli->connect_err
 $mysqli->set_charset('utf8mb4');
 
 // Leer POST
-$idReporte   = isset($_POST['idReporte']) ? intval($_POST['idReporte']) : 0;
-$statusNuevo = isset($_POST['status']) ? trim($_POST['status']) : '';
-$fechaInicioReq = isset($_POST['fechaInicio']) ? trim($_POST['fechaInicio']) : null;
-$fechaFin    = isset($_POST['fechaFin']) ? trim($_POST['fechaFin']) : null;
-$comentario  = isset($_POST['comentario']) ? trim($_POST['comentario']) : null;
-$rate        = isset($_POST['rate']) ? intval($_POST['rate']) : null;
+$idReporte     = isset($_POST['idReporte'])   ? intval($_POST['idReporte']) : 0;
+$statusNuevo   = isset($_POST['status'])      ? trim($_POST['status'])      : '';
+$fechaInicioReq= isset($_POST['fechaInicio']) ? trim($_POST['fechaInicio']) : null;
+$fechaFin      = isset($_POST['fechaFin'])    ? trim($_POST['fechaFin'])    : null;
+$comentario    = isset($_POST['comentario'])  ? trim($_POST['comentario'])  : null;
+$rate          = isset($_POST['rate'])        ? intval($_POST['rate'])      : null;
 
 if ($idReporte <= 0 || $statusNuevo === '') {
     fail(400, 'Faltan parámetros: idReporte y status');
 }
+
+// ⭐ Normaliza el status para comparar sin problemas de mayúsculas/acentos
+$norm = mb_strtolower($statusNuevo, 'UTF-8');
 
 // 1) Leer estado actual y FechaInicio
 $cur = $mysqli->prepare("SELECT Status, FechaInicio FROM produccion WHERE IDReporte = ?");
@@ -57,39 +60,45 @@ $curStatus = (string)($row['Status'] ?? '');
 $curInicio = $row['FechaInicio']; // puede ser null
 $cur->close();
 
-// 2) Construir UPDATE idempotente
+// ⭐ Idempotencia: si ya quedó Completado, no tocar (evitas pisar cierres)
+if (mb_strtolower($curStatus, 'UTF-8') === 'completado') {
+    echo json_encode(['ok' => true, 'skipped' => 'already_completed'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// 2) Construir UPDATE
 $sets   = ['Status = ?'];   // siempre actualizamos Status
 $params = [$statusNuevo];
 $types  = 's';
 
-// Lógica CURADA de FechaInicio:
-// - Sólo si pedimos "En camino"
-// - Y si el estado actual NO era "En camino"
-// - Y si actualmente FechaInicio es NULL/vacía
-if (strcasecmp($statusNuevo, 'En camino') === 0) {
-    $yaEnCamino = (strcasecmp($curStatus, 'En camino') === 0);
-    $inicioVacio = ($curInicio === null || $curInicio === '' );
-
+// Lógica de FechaInicio solo al pasar a “En camino” por primera vez
+if ($norm === 'en camino') {
+    $yaEnCamino   = (mb_strtolower($curStatus, 'UTF-8') === 'en camino');
+    $inicioVacio  = ($curInicio === null || $curInicio === '');
     if (!$yaEnCamino && $inicioVacio) {
         if ($fechaInicioReq !== null && $fechaInicioReq !== '') {
-        // Cliente proporciona fecha: la usamos SOLO en el primer cambio a En camino
-        $sets[]   = 'FechaInicio = ?';
-        $params[] = $fechaInicioReq;
-        $types   .= 's';
+            $sets[]   = 'FechaInicio = ?';
+            $params[] = $fechaInicioReq;
+            $types   .= 's';
         } else {
-        // Cliente no manda fecha: ponemos NOW()
-        $sets[] = 'FechaInicio = NOW()';
+            $sets[] = 'FechaInicio = NOW()';
         }
     }
 }
 
-// Otros campos opcionales (no tocan FechaInicio)
-if ($fechaFin !== null && $fechaFin !== '') {
-    $sets[]   = 'FechaFin = ?';
-    $params[] = $fechaFin;
-    $types   .= 's';
+// ⭐ Si el nuevo estado es Cancelado o Completado, asegura FechaFin
+if ($norm === 'cancelado' || $norm === 'completado') {
+    if ($fechaFin !== null && $fechaFin !== '') {
+        $sets[]   = 'FechaFin = ?';
+        $params[] = $fechaFin;
+        $types   .= 's';
+    } else {
+        $sets[] = 'FechaFin = NOW()';
+    }
 }
-if ($comentario !== null) {
+
+// Otros campos opcionales
+if ($comentario !== null && $comentario !== '') {
     $sets[]   = 'Comentario = ?';
     $params[] = $comentario;
     $types   .= 's';
@@ -100,7 +109,9 @@ if ($rate !== null) {
     $types   .= 'i';
 }
 
-$params[] = $idReporte; 
+// ⭐ Opcional: evita cambiar si ya está Completado (ya hicimos early-return arriba).
+//    Si quisieras reforzarlo en SQL: añade "AND Status <> 'Completado'" al WHERE.
+$params[] = $idReporte;
 $types   .= 'i';
 
 $sql = "UPDATE produccion SET " . implode(', ', $sets) . " WHERE IDReporte = ?";

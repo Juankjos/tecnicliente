@@ -27,7 +27,7 @@ class _AjustesPageState extends State<AjustesPage> {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: const Text('Versión'),
-            subtitle: const Text('1.0.0'),
+            subtitle: const Text('1.5.0'),
           ),
         ],
       ),

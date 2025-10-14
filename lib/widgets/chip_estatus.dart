@@ -12,6 +12,7 @@ class ChipEstatus extends StatelessWidget {
       case RutaStatus.pendiente:  bg = Colors.orange.shade100; icon = Icons.schedule; break;
       case RutaStatus.enCamino:   bg = Colors.blue.shade100;   icon = Icons.run_circle_outlined; break;
       case RutaStatus.completada: bg = Colors.green.shade100;  icon = Icons.check_circle_outline; break;
+      case RutaStatus.cancelado: bg = Colors.red.shade100;  icon = Icons.cancel; break;
     }
     return Container(
       margin: const EdgeInsets.only(left: 8),

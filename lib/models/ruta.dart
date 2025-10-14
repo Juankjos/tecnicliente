@@ -1,5 +1,5 @@
 // lib/models/ruta.dart
-enum RutaStatus { pendiente, enCamino, completada }
+enum RutaStatus { pendiente, enCamino, completada, cancelado }
 
 extension RutaStatusX on RutaStatus {
   String get label {
@@ -10,6 +10,8 @@ extension RutaStatusX on RutaStatus {
         return 'En Camino';
       case RutaStatus.completada:
         return 'Completada';
+      case RutaStatus.cancelado:
+        return 'Cancelado';
     }
   }
 
@@ -17,7 +19,7 @@ extension RutaStatusX on RutaStatus {
     final t = s.toLowerCase();
     if (t.startsWith('complet')) return RutaStatus.completada;
     if (t.startsWith('en camino')) return RutaStatus.enCamino;
-    // 'Cancelado' u otros -> lo tratamos como pendiente para listado
+    if (t.startsWith('cancel'))   return RutaStatus.cancelado;
     return RutaStatus.pendiente;
   }
 }
