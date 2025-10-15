@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Rutas Técnico',
+      title: 'Rutas',
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFF064E3B),

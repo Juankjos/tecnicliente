@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'dart:async'; 
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -10,7 +11,7 @@ import 'package:geocoding/geocoding.dart' as gc; // 👈 geocoding nativo
 
 import '../widgets/top_menu.dart';
 import '../state/destination_state.dart';
-import 'package:mi_app/widgets/route_polyline_layer.dart';
+import 'package:rutas/widgets/route_polyline_layer.dart';
 import '../services/rutas_api.dart';
 import '../models/ruta.dart';
 // ---- Ajusta tu base según entorno (igual que en rutas_page.dart)
@@ -30,9 +31,11 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver  {
   final MapController _mapController = MapController();
   final RutasApi _api = RutasApi(_apiUri);
+  StreamSubscription<Position>? _posSub;
+  final List<LatLng> _breadcrumb = [];
 
   bool _mapReady = false;
   LatLng? _pendingDest;
@@ -47,20 +50,74 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // 🔄 Bootstrap/refresh flag
   bool _syncing = false;
 
+  void _startTrackingBreadcrumb() {
+    // evita duplicados
+    if (_posSub != null) return;
+
+    // Ajusta a tu gusto: intervalos, precisión y distancia mínima
+    final settings = const LocationSettings(
+      accuracy: LocationAccuracy.best, // o high/medium si quieres ahorrar batería
+      distanceFilter: 10,              // en metros: añade punto cuando te mueves >=10m
+    );
+
+    _posSub = Geolocator.getPositionStream(locationSettings: settings).listen(
+      (pos) {
+        final p = LatLng(pos.latitude, pos.longitude);
+
+        // 1) agrega punto a la estela
+        if (_breadcrumb.isEmpty || _breadcrumb.last != p) {
+          _breadcrumb.add(p);
+        }
+
+        // 2) actualiza marcador “yo” (para que se mueva)
+        _markers.removeWhere((m) => m.key == const ValueKey('me'));
+        _markers.add(
+          Marker(
+            key: const ValueKey('me'),
+            point: p,
+            width: 28,
+            height: 28,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(.9),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+            ),
+          ),
+        );
+
+        // 3) opcional: seguir al usuario mientras hay destino
+        if (DestinationState.instance.selected.value != null && _mapReady) {
+          // _mapController.move(p, _mapController.camera.zoom); // si quieres “seguir” el punto
+        }
+
+        if (mounted) setState(() {});
+      },
+      onError: (_) {
+        // Silencioso; podrías mostrar un SnackBar si quieres
+      },
+    );
+  }
+
+  void _stopTrackingBreadcrumb() {
+    _posSub?.cancel();
+    _posSub = null;
+    _breadcrumb.clear();              // limpia estela al terminar la ruta
+    _markers.removeWhere((m) => m.key == const ValueKey('me'));
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
 
-    // 👇 registra el observer
-    WidgetsBinding.instance.addObserver(this);
-
-    // Escuchar el destino publicado desde RutasPage
+    WidgetsBinding.instance.addObserver(this);               // 👈 registrar
     DestinationState.instance.selected.addListener(_onDestinationChanged);
 
-    // Intentar centrar en mi ubicación
     _initMyLocation();
 
-    // Bootstrap: sincroniza al abrir
+    // Bootstrap al abrir: sincroniza contra servidor (y restaura En Camino)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _bootstrapSync();
     });
@@ -68,7 +125,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    WidgetsBinding.instance.removeObserver(this); // ✅ vuelve a activarlo
     DestinationState.instance.selected.removeListener(_onDestinationChanged);
     super.dispose();
   }
@@ -76,7 +133,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _bootstrapSync();
+      _bootstrapSync();                                     // 👈 re-sincroniza al volver
     }
   }
 
@@ -156,6 +213,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         fechaFin: DateTime.now(),
       );
 
+      _stopTrackingBreadcrumb(); 
       DestinationState.instance.set(null); // limpia destino
       _markers.removeWhere((m) => m.key == const ValueKey('destino'));
 
@@ -203,6 +261,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
         if (!alreadySame) {
           await _restoreDestination(r);
+          _startTrackingBreadcrumb();
         }
 
         if (mounted) {
@@ -225,6 +284,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _syncing = false;
     }
   }
+
+  // void _safeCloseDialog() {
+  //   if (!mounted) return;
+  //   final nav = Navigator.of(context, rootNavigator: true);
+  //   if (nav.canPop()) {
+  //     nav.pop();
+  //   }
+  // }
 
   /// Geocodifica la dirección y publica el destino en DestinationState
   Future<void> _restoreDestination(Ruta r) async {
@@ -254,6 +321,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         child: const Icon(Icons.location_pin, size: 48, color: Colors.red),
       ),
     );
+
+    _startTrackingBreadcrumb();
 
     if (mounted) setState(() {});
   }
@@ -320,6 +389,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   void _onDestinationChanged() {
     final dest = DestinationState.instance.selected.value;
+
+    if (dest != null) {
+        _startTrackingBreadcrumb();
+    } else {
+      _stopTrackingBreadcrumb();
+    }
 
     // Actualiza markers
     _markers.removeWhere((m) => m.key == const ValueKey('destino'));
@@ -523,6 +598,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       );
 
       // Limpia estado local del mapa y destino
+      _stopTrackingBreadcrumb();  
       DestinationState.instance.set(null);
       _markers.removeWhere((m) => m.key == const ValueKey('destino'));
 
@@ -545,21 +621,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  // void _doClearRoute() {
-  //   DestinationState.instance.set(null); // limpia coords + address + contrato + cliente
-  //   _markers.removeWhere((m) => m.key == const ValueKey('destino'));
-
-  //   if (mounted) setState(() {});
-
-  //   ScaffoldMessenger.of(context).showSnackBar(
-  //     const SnackBar(
-  //       content: Text('Ruta cancelada, EL CLIENTE SERÁ NOTIFICADO.'),
-  //       behavior: SnackBarBehavior.floating,
-  //       duration: Duration(milliseconds: 4000),
-  //     ),
-  //   );
-  // }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -573,7 +634,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           padding: const EdgeInsets.only(left: 12),
           child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
         ),
-        title: const Text('Rutas Técnico'),
+        title: const Text('Rutas'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 4),
@@ -642,6 +703,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     RichAttributionWidget(
                       attributions: [
                         TextSourceAttribution('© OpenStreetMap contributors', onTap: () {}),
+                      ],
+                    ),
+                    PolylineLayer(
+                      polylines: [
+                        if (_breadcrumb.length >= 2)
+                          Polyline(points: _breadcrumb, strokeWidth: 4.0),
                       ],
                     ),
                     const RoutePolylineLayer(profile: 'driving'),
