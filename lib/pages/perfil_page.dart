@@ -1,12 +1,14 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+
 import '../services/session.dart';
 
 class Tecnico {
   final int id;
   final String nombre;
-  final String telefono; // ahora String
+  final String telefono;
   final String planta;
 
   Tecnico({
@@ -17,25 +19,59 @@ class Tecnico {
   });
 
   factory Tecnico.fromJson(Map<String, dynamic> j) => Tecnico(
-        id: j['IdTec'] as int,
-        nombre: j['NombreTec'] as String,
-        telefono: (j['NumTec'] ?? '').toString(),
-        planta: (j['Planta'] ?? '').toString(),
+        id: (j['IdTec'] ?? j['id'] ?? j['idtec']) is String
+            ? int.tryParse(j['IdTec'] ?? j['id'] ?? j['idtec']) ?? 0
+            : (j['IdTec'] ?? j['id'] ?? j['idtec'] ?? 0) as int,
+        nombre: (j['NombreTec'] ?? j['nombre'] ?? '').toString(),
+        telefono: (j['NumTec'] ?? j['telefono'] ?? '').toString(),
+        planta: (j['Planta'] ?? j['planta'] ?? '').toString(),
       );
 }
 
-// Ajusta según tu opción actual (si usas dev-server o sirves por Apache)
-const String BASE_URL = "http://localhost/tecnicliente";
-// const String BASE_URL = "http://<TU_IP_LOCAL>/tecnicliente";
+// ---- Ajusta tu base como en el resto de pantallas
+const String _BASE_WEB = "http://localhost/tecnicliente";
+const String _BASE_EMU = "http://10.0.2.2/tecnicliente";
+Uri _apiUri(String pathWithQuery) {
+  final base = kIsWeb ? _BASE_WEB : _BASE_EMU;
+  return Uri.parse('$base/$pathWithQuery');
+}
 
-Future<Tecnico> fetchTecnicoPorId(int id) async {
-  final uri = Uri.parse("$BASE_URL/get_tecnico.php?id=$id");
-  final res = await http.get(uri);
+Future<Tecnico> _fetchTecnicoActual() async {
+  final id = Session.instance.idTec.value;
+  if (id == null) {
+    throw StateError('No hay sesión activa (idTec=null). Inicia sesión de nuevo.');
+  }
+
+  final uri = _apiUri('get_tecnico.php?id=$id');
+  // ignore: avoid_print
+  print('[Perfil] GET $uri');
+
+  final res = await http.get(uri).timeout(const Duration(seconds: 12));
+
+  // ignore: avoid_print
+  print('[Perfil] status=${res.statusCode}');
+  // ignore: avoid_print
+  print('[Perfil] body=${res.body.length > 300 ? res.body.substring(0, 300) + "...<trunc>" : res.body}');
+
   if (res.statusCode != 200) {
     throw Exception('HTTP ${res.statusCode}: ${res.body}');
   }
-  final data = json.decode(res.body) as Map<String, dynamic>;
-  return Tecnico.fromJson(data);
+
+  final body = res.body.trim();
+  if (body.isEmpty || body.startsWith('<')) {
+    throw FormatException('Respuesta no JSON (vacía o HTML): $body');
+  }
+
+  final decoded = json.decode(body);
+
+  // Soporta: { ... }  ó  [ { ... } ]
+  if (decoded is Map<String, dynamic>) {
+    return Tecnico.fromJson(decoded);
+  } else if (decoded is List && decoded.isNotEmpty && decoded.first is Map) {
+    return Tecnico.fromJson((decoded.first as Map).cast<String, dynamic>());
+  } else {
+    throw FormatException('Formato JSON inesperado: ${decoded.runtimeType}');
+  }
 }
 
 class PerfilPage extends StatelessWidget {
@@ -46,14 +82,26 @@ class PerfilPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Perfil')),
       body: FutureBuilder<Tecnico>(
-        future: fetchTecnicoPorId(Session.instance.idTec.value!),
+        future: _fetchTecnicoActual(),
         builder: (context, s) {
           if (s.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (s.hasError || !s.hasData) {
-            return const Center(child: Text('No se pudo cargar el perfil.'));
+          if (s.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'No se pudo cargar el perfil.\n\n${s.error}',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
           }
+          if (!s.hasData) {
+            return const Center(child: Text('Perfil no disponible.'));
+          }
+
           final t = s.data!;
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -68,9 +116,9 @@ class PerfilPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              _ItemDato(icon: Icons.phone, label: 'Teléfono', value: t.telefono),
-              _ItemDato(icon: Icons.location_on, label: 'Planta', value: t.planta), // <- NUEVO
-              const SizedBox(height: 24),
+              _ItemDato(icon: Icons.badge, label: 'ID Técnico', value: '${t.id}'),
+              _ItemDato(icon: Icons.phone, label: 'Teléfono', value: t.telefono.isEmpty ? '—' : t.telefono),
+              _ItemDato(icon: Icons.factory, label: 'Planta', value: t.planta.isEmpty ? '—' : t.planta),
             ],
           );
         },
