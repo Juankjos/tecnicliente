@@ -8,6 +8,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart' as gc; // 👈 geocoding nativo
+import '../services/session.dart';
 
 import '../widgets/top_menu.dart';
 import '../state/destination_state.dart';
@@ -249,7 +250,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver  {
     }
 
     try {
-      final rutas = await _api.fetchPorTecnico(106);
+      final rutas = await _api.fetchPorTecnico(Session.instance.idTec.value!);
       final enCamino = rutas.where((r) => r.estatus == RutaStatus.enCamino).toList();
 
       if (enCamino.isNotEmpty) {

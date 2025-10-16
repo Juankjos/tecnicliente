@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../services/session.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -52,6 +53,12 @@ class _RutasPageState extends State<RutasPage> {
   @override
   void initState() {
     super.initState();
+    if (!Session.instance.isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      });
+      return;
+    }
     _cargarRutas();
   }
 
@@ -128,7 +135,7 @@ class _RutasPageState extends State<RutasPage> {
     Future<void> _cargarRutas() async {
       setState(() => _cargando = true);
       try {
-        var rutas = await _api.fetchPorTecnico(106);
+        var rutas = await _api.fetchPorTecnico(Session.instance.idTec.value!);
 
         // 🔎 Detecta si el servidor ya tiene una ruta En camino
         final enCamino = rutas.where((r) => r.estatus == RutaStatus.enCamino).toList();

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../services/session.dart';
 
 class Tecnico {
   final int id;
@@ -45,7 +46,7 @@ class PerfilPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Perfil')),
       body: FutureBuilder<Tecnico>(
-        future: fetchTecnicoPorId(106),
+        future: fetchTecnicoPorId(Session.instance.idTec.value!),
         builder: (context, s) {
           if (s.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
