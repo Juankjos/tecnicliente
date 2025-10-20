@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+  socket_io_client: ^2.0.3 
   #Persistir ruta activa
   shared_preferences: ^2.3.2
 

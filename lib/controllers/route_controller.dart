@@ -12,6 +12,7 @@ import '../services/geocoder_native.dart';
 import '../services/geocoder_web.dart';
 import '../services/session.dart';                 // 👈 Session.instance...
 import '../models/ruta.dart' show Ruta, RutaStatus; // 👈 tu modelo y enum
+import '../services/live_socket.dart';
 
 class RouteController extends ChangeNotifier {
   final MapController map;
@@ -19,6 +20,7 @@ class RouteController extends ChangeNotifier {
   final LocationTracker tracker;
   final Geocoder geocoder;
   final LatLng defaultCenter;
+  LiveSocket? _live;
 
   RouteController({
     required this.map,
@@ -86,6 +88,7 @@ class RouteController extends ChangeNotifier {
         width: 48, height: 48,
         child: const Icon(Icons.location_pin, size: 48, color: Colors.red),
       ));
+      _ensureLiveSocketConnected();
       _startTracking(); // start si hay destino
       _moveCamera(dest, 16);
     } else {
@@ -96,15 +99,73 @@ class RouteController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _ensureLiveSocketConnected() {
+    if (_live != null) return; // ya conectados o en proceso
+    final tecId = Session.instance.idTec.value;
+    final reportId = DestinationState.instance.reportId.value;
+
+    if (reportId != null) {
+      debugPrint('[live] connecting… reportId=$reportId tecId=$tecId');
+      _live = LiveSocket()
+        ..connect(
+          serverUrl: kIsWeb ? 'http://localhost:3001' : 'http://10.0.2.2:3001',
+          reportId: reportId,
+          tecId: tecId,
+        );
+    } else {
+      // Aún no hay reportId: escucha UNA vez y conecta cuando llegue
+      debugPrint('[live] reportId null; waiting for it…');
+      void once() {
+        final rep = DestinationState.instance.reportId.value;
+        if (rep != null) {
+          DestinationState.instance.reportId.removeListener(once);
+          _ensureLiveSocketConnected();
+        }
+      }
+      DestinationState.instance.reportId.addListener(once);
+    }
+  }
+
   // ---------- Tracking ----------
   Future<void> _startTracking() async {
     if (_locSub != null) return;
-    await tracker.start(distanceFilter: 10);
+
+    debugPrint('[route] _startTracking called; reportId=${DestinationState.instance.reportId.value}');
+    _ensureLiveSocketConnected();
+    // 🔌 conectar LiveSocket si no está
+    final reportId = DestinationState.instance.reportId.value;
+    final tecId = Session.instance.idTec.value;
+    if (reportId != null && _live == null) {
+      _live = LiveSocket()
+        ..connect(
+          serverUrl: kIsWeb ? 'http://localhost:3001' : 'http://10.0.2.2:3001',
+          reportId: reportId,
+          tecId: tecId,
+        );
+    }
+
+    // ⬇️ filtro bajo para pruebas
+    await tracker.start(distanceFilter: 1);
+
+    // ✅ enviar posición inicial (se encola si aún no hay conexión)
+    final me = await tracker.current();
+    if (me != null) {
+      debugPrint('[live] initial -> ${me.latitude}, ${me.longitude}');
+      _live?.sendLocation(lat: me.latitude, lng: me.longitude);
+    }
+
+    // ♻️ Re-emite la última posición cada 3s en pruebas (para autoenfoque web)
+    Timer.periodic(const Duration(seconds: 3), (t) async {
+      if (_locSub == null) { t.cancel(); return; } // detén cuando pares el tracking
+      final cur = await tracker.current();
+      if (cur != null) {
+        _live?.sendLocation(lat: cur.latitude, lng: cur.longitude);
+      }
+    });
+
     _locSub = tracker.stream.listen((p) {
-      // breadcrumb
       if (breadcrumb.isEmpty || breadcrumb.last != p) breadcrumb.add(p);
 
-      // marcador "yo"
       markers.removeWhere((m) => m.key == const ValueKey('me'));
       markers.add(Marker(
         key: const ValueKey('me'),
@@ -118,6 +179,9 @@ class RouteController extends ChangeNotifier {
           ),
         ),
       ));
+
+      debugPrint('[live] send -> ${p.latitude}, ${p.longitude}');
+      _live?.sendLocation(lat: p.latitude, lng: p.longitude);
       notifyListeners();
     });
   }
@@ -128,6 +192,8 @@ class RouteController extends ChangeNotifier {
     await tracker.stop();
     breadcrumb.clear();
     markers.removeWhere((m) => m.key == const ValueKey('me'));
+    _live?.dispose();    // 🔌 cerrar ws
+    _live = null;
     notifyListeners();
   }
 
