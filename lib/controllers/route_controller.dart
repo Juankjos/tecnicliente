@@ -70,12 +70,21 @@ class RouteController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _sendDestinationToLiveIfAny() {
+    final d = DestinationState.instance.selected.value;
+    if (_live == null || d == null) return;
+    final addr = DestinationState.instance.address.value;
+    _live!.sendDestination(lat: d.latitude, lng: d.longitude, address: addr);
+  }
+
   // ---------- Destino ----------
   Future<void> restoreDestinationFromRuta(Ruta r) async {
     final coords = await geocoder.geocode(r.direccion, fallback: defaultCenter);
     DestinationState.instance.setWithDetails(
       coords, address: r.direccion, contract: r.contrato, client: r.cliente, reportId: r.id,
     );
+    _ensureLiveSocketConnected();
+    _sendDestinationToLiveIfAny(); // 👈 envía destino
   }
 
   void _onDestinationChanged(LatLng? dest) {
@@ -89,6 +98,7 @@ class RouteController extends ChangeNotifier {
         child: const Icon(Icons.location_pin, size: 48, color: Colors.red),
       ));
       _ensureLiveSocketConnected();
+      _sendDestinationToLiveIfAny();
       _startTracking(); // start si hay destino
       _moveCamera(dest, 16);
     } else {

@@ -4,6 +4,7 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 class LiveSocket {
   IO.Socket? _s;
   final List<Map<String, dynamic>> _queue = [];
+  Map<String, dynamic>? _pendingDest; // 👈 destino pendiente
 
   bool get isConnected => _s?.connected == true;
 
@@ -19,13 +20,18 @@ class LiveSocket {
           .setTransports(['websocket'])
           .setQuery({'reportId': '$reportId', 'tecId': tecId?.toString() ?? '', 'role': 'tech'})
           .enableReconnection()
-          // Importante: deja autoConnect por defecto (true). No llames _s!.connect() dos veces.
           .build(),
     );
 
     _s!.onConnect((_) {
       print('[live] connected id=${_s!.id}');
       _flushQueue();
+      // 👇 si había un destino pendiente, emitirlo ahora
+      if (_pendingDest != null) {
+        _s?.emit('destination:update', _pendingDest);
+        print('[live] sent pending destination');
+        _pendingDest = null;
+      }
     });
     _s!.onConnectError((e) => print('[live] connect_error: $e'));
     _s!.onError((e) => print('[live] error: $e'));
@@ -40,6 +46,21 @@ class LiveSocket {
     if (_queue.isNotEmpty) {
       print('[live] flushed ${_queue.length} queued updates');
       _queue.clear();
+    }
+  }
+
+  void sendDestination({
+    required double lat,
+    required double lng,
+    String? address,
+  }) {
+    final payload = {'lat': lat, 'lng': lng, if (address != null) 'address': address};
+    if (_s?.connected == true) {
+      _s?.emit('destination:update', payload);
+    } else {
+      // 👉 guárdalo y lo mandamos al conectar
+      _pendingDest = payload;
+      print('[live] queued destination (will send on connect)');
     }
   }
 
@@ -59,7 +80,6 @@ class LiveSocket {
     };
 
     if (!isConnected) {
-      // Cola hasta que conecte
       _queue.add(payload);
       print('[live] queued update (socket not connected yet). queue=${_queue.length}');
       return;
@@ -71,5 +91,6 @@ class LiveSocket {
     _s?.dispose();
     _s = null;
     _queue.clear();
+    _pendingDest = null;
   }
 }
