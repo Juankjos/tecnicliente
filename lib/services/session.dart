@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 
 // Ajusta igual que en el resto de la app
 const String _BASE_WEB = "http://localhost/tecnicliente";
-const String _BASE_EMU = "http://10.0.2.2/tecnicliente";
+const String _BASE_EMU = "http://127.0.0.1:8080/tecnicliente";
 Uri _apiUri(String path) {
   final base = kIsWeb ? _BASE_WEB : _BASE_EMU;
   return Uri.parse('$base/$path');

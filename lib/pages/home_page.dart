@@ -10,10 +10,12 @@
   import '../state/destination_state.dart';
 
   const String _BASE_WEB = "http://localhost/tecnicliente";
-  const String _BASE_EMU = "http://10.0.2.2/tecnicliente";
+  const String _BASE_EMU = "http://127.0.0.1/tecnicliente";
+  const String _BASE_DEV_ADB = "http://127.0.0.1:8080/tecnicliente";
   Uri _apiUri(String pathWithQuery) {
-    final base = kIsWeb ? _BASE_WEB : _BASE_EMU;
-    return Uri.parse('$base/$pathWithQuery');
+    // final base = kIsWeb ? _BASE_WEB : _BASE_EMU;
+    // return Uri.parse('$base/$pathWithQuery');
+    return Uri.parse('$_BASE_DEV_ADB/$pathWithQuery');
   }
 
   class HomePage extends StatefulWidget {

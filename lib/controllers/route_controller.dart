@@ -13,6 +13,7 @@ import '../services/geocoder_web.dart';
 import '../services/session.dart';                 // 👈 Session.instance...
 import '../models/ruta.dart' show Ruta, RutaStatus; // 👈 tu modelo y enum
 import '../services/live_socket.dart';
+import 'package:geolocator/geolocator.dart';
 
 class RouteController extends ChangeNotifier {
   final MapController map;
@@ -118,7 +119,7 @@ class RouteController extends ChangeNotifier {
       debugPrint('[live] connecting… reportId=$reportId tecId=$tecId');
       _live = LiveSocket()
         ..connect(
-          serverUrl: kIsWeb ? 'http://localhost:3001' : 'http://10.0.2.2:3001',
+          serverUrl: kIsWeb ? 'http://localhost:3001' : 'http://127.0.0.1:3001',
           reportId: reportId,
           tecId: tecId,
         );
@@ -148,11 +149,14 @@ class RouteController extends ChangeNotifier {
     if (reportId != null && _live == null) {
       _live = LiveSocket()
         ..connect(
-          serverUrl: kIsWeb ? 'http://localhost:3001' : 'http://10.0.2.2:3001',
+          serverUrl: kIsWeb ? 'http://localhost:3001' : 'http://127.0.0.1:3001',
           reportId: reportId,
           tecId: tecId,
         );
     }
+
+    final perm = await Geolocator.requestPermission();
+    print('[debug] location permission: $perm');
 
     // ⬇️ filtro bajo para pruebas
     await tracker.start(distanceFilter: 1);
@@ -166,9 +170,10 @@ class RouteController extends ChangeNotifier {
 
     // ♻️ Re-emite la última posición cada 3s en pruebas (para autoenfoque web)
     Timer.periodic(const Duration(seconds: 3), (t) async {
-      if (_locSub == null) { t.cancel(); return; } // detén cuando pares el tracking
+      if (_locSub == null) { t.cancel(); return; }
       final cur = await tracker.current();
       if (cur != null) {
+        print('[live] periodic -> ${cur.latitude}, ${cur.longitude}');
         _live?.sendLocation(lat: cur.latitude, lng: cur.longitude);
       }
     });
