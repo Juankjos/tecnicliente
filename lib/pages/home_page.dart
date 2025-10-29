@@ -1,6 +1,6 @@
   // lib/pages/home_page.dart
   import 'package:flutter/material.dart';
-  import 'package:flutter/foundation.dart' show kIsWeb;
+  // import 'package:flutter/foundation.dart' show kIsWeb;
   import 'package:flutter_map/flutter_map.dart';
   import '../controllers/route_controller.dart';
   import '../services/rutas_api.dart';
@@ -8,9 +8,10 @@
   import '../widgets/top_menu.dart';
   import '../widgets/dialogs.dart';
   import '../state/destination_state.dart';
+  import 'chat_page.dart';
 
-  const String _BASE_WEB = "http://localhost/tecnicliente";
-  const String _BASE_EMU = "http://127.0.0.1/tecnicliente";
+  // const String _BASE_WEB = "http://localhost/tecnicliente";
+  // const String _BASE_EMU = "http://127.0.0.1/tecnicliente";
   const String _BASE_DEV_ADB = "http://127.0.0.1:8080/tecnicliente";
   Uri _apiUri(String pathWithQuery) {
     // final base = kIsWeb ? _BASE_WEB : _BASE_EMU;
@@ -152,7 +153,7 @@
                 padding: const EdgeInsets.only(left: 12),
                 child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
               ),
-              title: const Text('Rutas'),
+              // title: const Text('Rutas'),
               actions: [
                 Padding(
                   padding: const EdgeInsets.only(right: 4),
@@ -206,6 +207,21 @@
                         onMapReady: ctrl.onMapReady,
                       ),
                     ),
+                  ),
+                ),
+                Positioned(
+                  left: 16,
+                  bottom: 16,
+                  child: FloatingActionButton(
+                    heroTag: 'chat',
+                    tooltip: 'Abrir chat',
+                    backgroundColor: const Color.fromARGB(255, 125, 169, 209),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ChatPage()),
+                      );
+                    },
+                    child: const Icon(Icons.chat_bubble_outline),
                   ),
                 ),
               ],

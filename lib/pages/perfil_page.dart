@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+// import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -29,8 +29,8 @@ class Tecnico {
 }
 
 // ---- Ajusta tu base como en el resto de pantallas
-const String _BASE_WEB = "http://localhost/tecnicliente";
-const String _BASE_EMU = "http://127.0.0.1/tecnicliente";
+// const String _BASE_WEB = "http://localhost/tecnicliente";
+// const String _BASE_EMU = "http://127.0.0.1/tecnicliente";
 const String _BASE_DEV_ADB = "http://127.0.0.1:8080/tecnicliente";
 Uri _apiUri(String pathWithQuery) {
   // final base = kIsWeb ? _BASE_WEB : _BASE_EMU;
@@ -53,7 +53,7 @@ Future<Tecnico> _fetchTecnicoActual() async {
   // ignore: avoid_print
   print('[Perfil] status=${res.statusCode}');
   // ignore: avoid_print
-  print('[Perfil] body=${res.body.length > 300 ? res.body.substring(0, 300) + "...<trunc>" : res.body}');
+  // print('[Perfil] body=${res.body.length > 300 ? res.body.substring(0, 300) + "...<trunc>" : res.body}');
 
   if (res.statusCode != 200) {
     throw Exception('HTTP ${res.statusCode}: ${res.body}');
