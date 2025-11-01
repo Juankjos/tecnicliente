@@ -115,7 +115,7 @@ if (!$stmt->execute()) fail(500, 'Execute (UPDATE) falló', $stmt->error);
 // ---- Registro histórico solo cuando se cancela ----
 if ($norm === 'cancelado') {
     // Si no viene motivo, pon uno por defecto
-    $motivo = ($motivoCancel !== null && $motivoCancel !== '') ? $motivoCancel : 'Cancelado sin motivo';
+    $motivo = ($motivoCancel !== null && $motivoCancel !== '') ? $motivoCancel : 'No se escribió motivo';
 
     // IMPORTANTE: IDProd es FK a produccion.IDProd; aquí sólo tenemos IDReporte.
     // Insertamos buscando el IDProd por IDReporte para respetar la FK.
