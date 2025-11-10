@@ -33,24 +33,32 @@ class GeoApi {
   // Intenta varias variantes: original, +ciudad por defecto, +alternas
   Future<List<GeoCandidate>> searchSmart({
     required String rawQuery,
-    String defaultCity = 'Tepatitlán de Morelos, Jalisco, México',
-    List<String> altCities = const ['San José de Gracia, Jalisco, México'],
-    ({double lat, double lon})? proximity, // para priorizar resultados cerca
+    String? cityFromDb, // opcional, si quieres segundo intento
+    ({double lat, double lon})? proximity,
     int limit = 5,
     String country = 'mx',
     String language = 'es',
   }) async {
     final q1 = _normalize(rawQuery);
-    final hasJalisco = RegExp(r'jalisco|jal\.', caseSensitive: false).hasMatch(q1);
+    // Solo probamos:
+    // 1) La dirección exacta de BD (normalizada).
+    // 2) (Opcional) La dirección + ciudad proveniente de BD si no estaba incluida.
     final candidates = <String>{
       q1,
-      if (!hasJalisco) '$q1 $defaultCity',
-      ...altCities.map((c) => '$q1 $c'),
+      if (cityFromDb != null &&
+          cityFromDb.trim().isNotEmpty &&
+          !q1.toLowerCase().contains(cityFromDb.toLowerCase()))
+        '$q1 $cityFromDb',
     }.toList();
 
     for (final q in candidates) {
-      final list = await _mapboxForward(q,
-          limit: limit, country: country, language: language, proximity: proximity);
+      final list = await _mapboxForward(
+        q,
+        limit: limit,
+        country: country,
+        language: language,
+        proximity: proximity,
+      );
       if (list.isNotEmpty) return list;
     }
     return const <GeoCandidate>[];

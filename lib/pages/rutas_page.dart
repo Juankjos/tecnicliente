@@ -567,8 +567,8 @@ class _RutasPageState extends State<RutasPage> {
     // Variantes con ciudades comunes de tu zona
     final variants = <String>{
       q,
-      '$q Tepatitlán de Morelos, Jalisco, México',
-      '$q San José de Gracia, Jalisco, México',
+      // (Opcional) si extraes ciudad desde tu BD y NO viene en q, añade este intento:
+      // '$q $ciudadDeBD',
     }.toList();
 
     for (final v in variants) {

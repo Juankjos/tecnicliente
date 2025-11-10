@@ -5,8 +5,9 @@ import 'dart:async';
 
 class LiveSocket {
   IO.Socket? _s;
-  final List<Map<String, dynamic>> _queue = [];
-  Map<String, dynamic>? _pendingDest; // 👈 destino pendiente
+
+  final List<Map<String, dynamic>> _queue = []; // cola de updates si aún no conectó
+  Map<String, dynamic>? _pendingDest;           // destino pendiente
 
   final _chatCtrl = StreamController<ChatMsg>.broadcast();
   Stream<ChatMsg> get chatStream => _chatCtrl.stream;
@@ -15,36 +16,50 @@ class LiveSocket {
 
   bool get isConnected => _s?.connected == true;
 
+  // Flags de primer ACK (garantiza que el primer dato realmente fue procesado)
+  bool _firstLocationAcked = false;
+  bool _firstDestAcked = false;
+
   void connect({
     required String serverUrl,
     required int reportId,
     required int? tecId,
   }) {
     if (_s != null) return;
+
     _s = IO.io(
       serverUrl,
       IO.OptionBuilder()
           .setTransports(['websocket'])
-          .setQuery({'reportId': '$reportId', 'tecId': tecId?.toString() ?? '', 'role': 'tech'})
-          .enableReconnection()
+          .setQuery({
+            'reportId': '$reportId',
+            'tecId': tecId?.toString() ?? '',
+            'role': 'tech',
+          })
+          .disableAutoConnect()      // 👈 controlamos cuándo conectar
+          .enableReconnection()      // 👈 SÍ existe; reemplaza setReconnection(true)
+          // .setReconnectionAttempts(999999)
+          // .setReconnectionDelay(800)
+          // .setReconnectionDelayMax(6000)
           .build(),
     );
 
+    // --------- LISTENERS ---------
     _s!.onConnect((_) {
       print('[live] connected id=${_s!.id}');
       _flushQueue();
-      // 👇 si había un destino pendiente, emitirlo ahora
       if (_pendingDest != null) {
-        _s?.emit('destination:update', _pendingDest);
+        _emitDestination(_pendingDest!);      // con ACK si es el primero
         print('[live] sent pending destination');
         _pendingDest = null;
       }
-      // 👉 al conectar, pide historial de chat (últimos N)
       _s?.emit('chat:history:get', {'limit': 50});
     });
+
+    // Nota: en Dart, onConnect se dispara también tras reconectar.
     _s!.onConnectError((e) => print('[live] connect_error: $e'));
     _s!.onError((e) => print('[live] error: $e'));
-    _s!.onDisconnect((_) => print('[live] disconnected'));
+    _s!.onDisconnect((reason) => print('[live] disconnected: $reason'));
 
     _s!.on('chat:message', (data) {
       try {
@@ -59,11 +74,12 @@ class LiveSocket {
     _s!.on('chat:history', (payload) {
       try {
         final list = (payload is List ? payload : <dynamic>[]).cast<dynamic>();
-        final msgs = list.map((e) => ChatMsg.fromMap(Map<String, dynamic>.from(e))).toList();
+        final msgs = list
+            .map((e) => ChatMsg.fromMap(Map<String, dynamic>.from(e)))
+            .toList();
         chatBuffer
           ..clear()
           ..addAll(msgs);
-        // También emítelos por stream para hidratar UI
         for (final m in msgs) {
           _chatCtrl.add(m);
         }
@@ -71,12 +87,39 @@ class LiveSocket {
         print('[live] chat:history parse error $e');
       }
     });
+
+    // 👇 Conecta al final (ya con todos los listeners listos)
+    _s!.connect();
   }
 
+  // --------- WRAPPERS con ACK para primer envío ---------
+  void _emitLocation(Map<String, dynamic> payload) {
+    if (!_firstLocationAcked) {
+      _s?.emitWithAck('location:update', payload, ack: (res) {
+        print('[live] ACK location:update => $res');
+        _firstLocationAcked = true;
+      });
+    } else {
+      _s?.emit('location:update', payload);
+    }
+  }
+
+  void _emitDestination(Map<String, dynamic> payload) {
+    if (!_firstDestAcked) {
+      _s?.emitWithAck('destination:update', payload, ack: (res) {
+        print('[live] ACK destination:update => $res');
+        _firstDestAcked = true;
+      });
+    } else {
+      _s?.emit('destination:update', payload);
+    }
+  }
+
+  // --------- FLUSH COLA ---------
   void _flushQueue() {
     if (!isConnected) return;
     for (final msg in _queue) {
-      _s?.emit('location:update', msg);
+      _emitLocation(msg); // usa el wrapper (ACK para el primero)
     }
     if (_queue.isNotEmpty) {
       print('[live] flushed ${_queue.length} queued updates');
@@ -84,16 +127,16 @@ class LiveSocket {
     }
   }
 
+  // --------- API PÚBLICA ---------
   void sendDestination({
     required double lat,
     required double lng,
     String? address,
   }) {
     final payload = {'lat': lat, 'lng': lng, if (address != null) 'address': address};
-    if (_s?.connected == true) {
-      _s?.emit('destination:update', payload);
+    if (isConnected) {
+      _emitDestination(payload);
     } else {
-      // 👉 guárdalo y lo mandamos al conectar
       _pendingDest = payload;
       print('[live] queued destination (will send on connect)');
     }
@@ -119,7 +162,7 @@ class LiveSocket {
       print('[live] queued update (socket not connected yet). queue=${_queue.length}');
       return;
     }
-    _s?.emit('location:update', payload);
+    _emitLocation(payload); // usa wrapper
   }
 
   void sendChat({
@@ -137,7 +180,8 @@ class LiveSocket {
       'ts': now,
     };
     _s?.emit('chat:send', payload);
-    // Opcional: eco optimista inmediato
+
+    // Eco optimista
     final local = ChatMsg(
       reportId: reportId,
       from: 'tech',
@@ -162,6 +206,8 @@ class LiveSocket {
     _s = null;
     _queue.clear();
     _pendingDest = null;
+    _firstLocationAcked = false;
+    _firstDestAcked = false;
     _chatCtrl.close();
     chatBuffer.clear();
   }
