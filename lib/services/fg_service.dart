@@ -39,8 +39,8 @@ class FgService {
       notificationText: 'Servicio activo (toca para volver a la app)',
 
       notificationIcon: const NotificationIcon(
-  metaDataName: 'com.rutas.service.NOTIF_ICON',
-),
+        metaDataName: 'com.rutas.service.NOTIF_ICON',
+      ),
 
       notificationButtons: const [
         NotificationButton(id: 'stop', text: 'Detener'),
