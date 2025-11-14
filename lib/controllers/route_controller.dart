@@ -14,6 +14,8 @@ import '../services/session.dart';                 // 👈 Session.instance...
 import '../models/ruta.dart' show Ruta, RutaStatus; // 👈 tu modelo y enum
 import '../services/live_socket.dart';
 import 'package:geolocator/geolocator.dart';
+import '../services/permits.dart';
+import '../services/fg_service.dart';
 
 class RouteController extends ChangeNotifier {
   final MapController map;
@@ -141,18 +143,25 @@ class RouteController extends ChangeNotifier {
   Future<void> _startTracking() async {
     if (_locSub != null) return;
 
+    final ok = await Permits.requestLocationWithBackground();
+    if (!ok) {
+      debugPrint('[track] permisos no concedidos');
+      return;
+    }
+
     debugPrint('[route] _startTracking called; reportId=${DestinationState.instance.reportId.value}');
     _ensureLiveSocketConnected();
     // 🔌 conectar LiveSocket si no está
     final reportId = DestinationState.instance.reportId.value;
     final tecId = Session.instance.idTec.value;
-    if (reportId != null && _live == null) {
-      _live = LiveSocket()
-        ..connect(
-          serverUrl: kIsWeb ? 'http://localhost:3001' : 'http://127.0.0.1:3001',
-          reportId: reportId,
-          tecId: tecId,
-        );
+    // dentro de _startTracking(), antes de empezar tu stream local:
+    if (reportId != null && !kIsWeb) {
+      await FgService.start(
+        reportId: reportId,
+        tecId: tecId,
+        serverUrl: 'http://127.0.0.1:3001',
+        intervalMs: 5000, // 5s
+      );
     }
 
     final perm = await Geolocator.requestPermission();
@@ -205,6 +214,7 @@ class RouteController extends ChangeNotifier {
     await _locSub?.cancel();
     _locSub = null;
     await tracker.stop();
+    await FgService.stop();
     breadcrumb.clear();
     markers.removeWhere((m) => m.key == const ValueKey('me'));
     _live?.dispose();    // 🔌 cerrar ws

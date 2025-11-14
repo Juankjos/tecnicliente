@@ -10,15 +10,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  socket_io_client: ^2.0.3 
+  socket_io_client: ^3.1.2 
   #Persistir ruta activa
   shared_preferences: ^2.3.2
+
+  #Permisos
+  permission_handler: ^12.0.1
 
   # Networking
   http: ^1.2.2
 
   # Geocoding (dirección -> lat/lon). Mantén UNA versión.
-  geocoding: ^2.1.1
+  geocoding: ^4.0.0
 
   # GPS del dispositivo (opcional; si no lo usas, puedes quitarlo)
   geolocator: ^14.0.2
@@ -34,10 +37,13 @@ dependencies:
   # UI
   cupertino_icons: ^1.0.8
 
+  # Tareas en segundo plano
+  flutter_foreground_task: ^9.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.1
 
 flutter:
