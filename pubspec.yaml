@@ -40,6 +40,12 @@ dependencies:
   # Tareas en segundo plano
   flutter_foreground_task: ^9.1.0
 
+  # Firebase core
+  firebase_core: ^4.2.1
+
+  # Firebase Cloud Messaging
+  firebase_messaging: ^16.0.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -19,7 +19,7 @@ class RutasApi {
 
   String _sample(String s, [int n = 400]) {
     if (s.length <= n) return s;
-    return s.substring(0, n) + '...<truncated>';
+    return '${s.substring(0, n)}...<truncated>';
   }
 
   // ---------- Lecturas ----------
@@ -94,16 +94,16 @@ class RutasApi {
     String? comentario,
     int? rate,
   }) async {
-    String? _fmt(DateTime? dt) =>
-        dt == null ? null : dt.toIso8601String().substring(0, 19).replaceAll('T', ' ');
+    String? fmt(DateTime? dt) =>
+        dt?.toIso8601String().substring(0, 19).replaceAll('T', ' ');
     
     final uri = _buildUri('update_status.php');
 
     final body = {
       'idReporte': '$idReporte',
       'status': status,
-      if (fechaInicio != null) 'fechaInicio': _fmt(fechaInicio)!,
-      if (fechaFin != null) 'fechaFin': _fmt(fechaFin)!,
+      if (fechaInicio != null) 'fechaInicio': fmt(fechaInicio)!,
+      if (fechaFin != null) 'fechaFin': fmt(fechaFin)!,
       if (comentario != null) 'comentario': comentario,
       if (rate != null) 'rate': '$rate',
     };

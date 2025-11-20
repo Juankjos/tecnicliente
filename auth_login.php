@@ -31,6 +31,10 @@ $mysqli->set_charset('utf8mb4');
 $idTec    = isset($_POST['idTec']) ? intval($_POST['idTec']) : 0;
 $password = isset($_POST['password']) ? (string)$_POST['password'] : '';
 
+// 🔔 Entrada opcional de FCM
+$fcmToken = isset($_POST['fcm_token']) ? trim((string)$_POST['fcm_token']) : '';
+$platform = isset($_POST['platform']) ? trim((string)$_POST['platform']) : 'android';
+
 if ($idTec <= 0 || $password === '') fail(400, 'Faltan idTec o password');
 
 $stmt = $mysqli->prepare("SELECT IdTec, PasswordHash, NombreTec, NumTec, Planta FROM tecnicos WHERE IdTec = ?");
@@ -45,6 +49,24 @@ $hash = (string)($row['PasswordHash'] ?? '');
 
 if ($hash === '' || !password_verify($password, $hash)) {
   fail(401, 'Credenciales inválidas');
+}
+
+$tecId = intval($row['IdTec']);
+
+// Si viene FCM token, lo guardamos
+if ($fcmToken !== '') {
+  $stmtTok = $mysqli->prepare("
+    INSERT INTO device_tokens (tec_id, token, platform)
+    VALUES (?, ?, ?)
+    ON DUPLICATE KEY UPDATE tec_id = VALUES(tec_id),
+                            platform = VALUES(platform),
+                            updated_at = CURRENT_TIMESTAMP
+  ");
+  if ($stmtTok) {
+    $stmtTok->bind_param('iss', $tecId, $fcmToken, $platform);
+    $stmtTok->execute();
+    $stmtTok->close();
+  }
 }
 
 // OK
