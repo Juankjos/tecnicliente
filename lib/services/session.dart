@@ -7,8 +7,8 @@ import 'package:http/http.dart' as http;
 import 'push_service.dart'; // 👈 importar el PushService
 
 // Ajusta igual que en el resto de la app
-const String _BASE_WEB = "http://localhost/tecnicliente";
-const String _BASE_EMU = "http://127.0.0.1:8080/tecnicliente";
+const String _BASE_WEB = "http://167.99.163.209/tecnicliente";
+const String _BASE_EMU = "http://167.99.163.209/tecnicliente";
 
 Uri _apiUri(String path) {
   final base = kIsWeb ? _BASE_WEB : _BASE_EMU;

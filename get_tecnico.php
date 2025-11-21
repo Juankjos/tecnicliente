@@ -4,7 +4,7 @@ header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json; charset=utf-8');
 
-$host = "127.0.0.1";
+$host = "167.99.163.209";
 $user = "root";
 $pass = ""; // o el que uses en XAMPP
 $db   = "clientes";

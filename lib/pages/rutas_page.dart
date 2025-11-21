@@ -17,7 +17,7 @@ import '../state/destination_state.dart';
 // const String _BASE_WEB = "http://localhost/tecnicliente";   // Chrome (dev) con CORS en PHP
 // const String _BASE_EMU = "http://127.0.0.1/tecnicliente";    // Android emulator
 // const String _BASE_LAN = "http://192.168.1.xxx/tecnicliente"; // Dispositivo físico (si lo usas)
-const String _BASE_DEV_ADB = "http://127.0.0.1:8080/tecnicliente";
+const String _BASE_DEV_ADB = "http://167.99.163.209/tecnicliente";
 
 Uri _apiUri(String pathWithQuery) {
   // final base = kIsWeb ? _BASE_WEB : _BASE_EMU;

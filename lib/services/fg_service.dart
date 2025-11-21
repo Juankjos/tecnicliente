@@ -6,7 +6,7 @@ class FgService {
   static Future<void> start({
     required int reportId,
     required int? tecId,
-    String serverUrl = 'http://127.0.0.1:3001',
+    String serverUrl = 'http://167.99.163.209:3001',
     int intervalMs = 5000,
   }) async {
     print('[fg-service] start() reportId=$reportId tecId=$tecId');

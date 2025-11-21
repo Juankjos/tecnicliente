@@ -121,7 +121,7 @@ class RouteController extends ChangeNotifier {
       debugPrint('[live] connecting… reportId=$reportId tecId=$tecId');
       _live = LiveSocket()
         ..connect(
-          serverUrl: kIsWeb ? 'http://localhost:3001' : 'http://127.0.0.1:3001',
+          serverUrl: kIsWeb ? 'http://167.99.163.209:3001' : 'http://167.99.163.209:3001',
           reportId: reportId,
           tecId: tecId,
         );
@@ -159,7 +159,7 @@ class RouteController extends ChangeNotifier {
       await FgService.start(
         reportId: reportId,
         tecId: tecId,
-        serverUrl: 'http://127.0.0.1:3001',
+        serverUrl: 'http://167.99.163.209:3001',
         intervalMs: 5000, // 5s
       );
     }

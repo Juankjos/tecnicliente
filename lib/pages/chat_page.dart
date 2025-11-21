@@ -50,7 +50,7 @@ class _ChatPageState extends State<ChatPage> {
     live = LiveSocket();
     // Conéctate si no lo está (puedes mover serverUrl a tu config)
     live.connect(
-      serverUrl: 'http://localhost:3001',
+      serverUrl: 'http://167.99.163.209:3001',
       reportId: _reportId!,
       tecId: _tecId,
     );

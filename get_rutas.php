@@ -17,7 +17,7 @@ function json_fail(int $code, string $msg, string $detail = null) {
   exit;
 }
 
-$host = "127.0.0.1";
+$host = "167.99.163.209";
 $user = "root";
 $pass = "";
 $db   = "clientes";

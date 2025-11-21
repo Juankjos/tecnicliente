@@ -10,7 +10,7 @@ class TrackTaskHandler extends TaskHandler {
   LiveSocket? _live;
   int? _reportId;
   int? _tecId;
-  String _serverUrl = 'http://127.0.0.1:3001';
+  String _serverUrl = 'http://167.99.163.209:3001';
 
   // 👇 Nuevas propiedades para manejar el stream
   StreamSubscription<Position>? _posSub;
