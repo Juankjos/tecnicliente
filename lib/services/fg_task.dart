@@ -71,8 +71,6 @@ class TrackTaskHandler extends TaskHandler {
       // Actualiza la notificación con la última posición
       await FlutterForegroundTask.updateService(
         notificationTitle: 'Rastreando ruta (activo)',
-        notificationText:
-            'Lat: ${pos.latitude.toStringAsFixed(5)}, Lng: ${pos.longitude.toStringAsFixed(5)}',
       );
     }, onError: (e, st) {
       print('[fg-stream] error: $e');
@@ -103,8 +101,6 @@ class TrackTaskHandler extends TaskHandler {
         print('[fg] onRepeatEvent usando lastPos @ ${pos.timestamp}');
         await FlutterForegroundTask.updateService(
           notificationTitle: 'Rastreando ruta (activo)',
-          notificationText:
-              'Lat: ${pos.latitude.toStringAsFixed(5)}, Lng: ${pos.longitude.toStringAsFixed(5)}',
         );
         return;
       }
@@ -124,8 +120,6 @@ class TrackTaskHandler extends TaskHandler {
 
       await FlutterForegroundTask.updateService(
         notificationTitle: 'Rastreando ruta (activo)',
-        notificationText:
-            'Lat: ${pos.latitude.toStringAsFixed(5)}, Lng: ${pos.longitude.toStringAsFixed(5)}',
       );
     } catch (e, st) {
       print('[fg] error en onRepeatEvent: $e');
