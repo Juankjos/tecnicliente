@@ -29,6 +29,8 @@ class MapView extends StatelessWidget {
       options: MapOptions(
         initialCenter: initialCenter,
         initialZoom: initialZoom,
+        minZoom: 3,
+        maxZoom: 19,
         onMapReady: onMapReady,
       ),
       children: [
@@ -36,6 +38,10 @@ class MapView extends StatelessWidget {
           urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
           subdomains: const ['a','b','c'],
           userAgentPackageName: 'com.tuempresa.tecnicliente',
+          maxZoom: 19,
+          keepBuffer: 4, //Ayuda a que las baldozas, mejora fluidez
+          errorTileCallback: (tile, error, stackTrace) {
+          },
         ),
         MarkerLayer(markers: markers),
         PolylineLayer(polylines: [

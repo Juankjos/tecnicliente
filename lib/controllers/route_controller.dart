@@ -24,6 +24,7 @@ class RouteController extends ChangeNotifier {
   final Geocoder geocoder;
   final LatLng defaultCenter;
   LiveSocket? _live;
+  DateTime? _lastUiUpdate;
 
   RouteController({
     required this.map,
@@ -168,7 +169,7 @@ class RouteController extends ChangeNotifier {
     print('[debug] location permission: $perm');
 
     // ⬇️ filtro bajo para pruebas
-    await tracker.start(distanceFilter: 1);
+    await tracker.start(distanceFilter: 10); //Cada 10 metros refresca para reducir frecuencia de eventos
 
     // ✅ enviar posición inicial (se encola si aún no hay conexión)
     final me = await tracker.current();
@@ -187,9 +188,14 @@ class RouteController extends ChangeNotifier {
       }
     });
 
+    const maxBreadcrumbPoints = 500;
     _locSub = tracker.stream.listen((p) {
-      if (breadcrumb.isEmpty || breadcrumb.last != p) breadcrumb.add(p);
-
+      if (breadcrumb.isEmpty || breadcrumb.last != p) {
+        breadcrumb.add(p);
+        if (breadcrumb.length > maxBreadcrumbPoints) {
+          breadcrumb.removeRange(0, breadcrumb.length - maxBreadcrumbPoints);
+        }
+      }
       markers.removeWhere((m) => m.key == const ValueKey('me'));
       markers.add(Marker(
         key: const ValueKey('me'),
@@ -204,9 +210,14 @@ class RouteController extends ChangeNotifier {
         ),
       ));
 
+      //Actualizo la UI cada 2 veces por segundo
+      final now = DateTime.now();
+      if (_lastUiUpdate == null || now.difference(_lastUiUpdate!) > const Duration(milliseconds: 500)) {
+        _lastUiUpdate = now;
+        notifyListeners();
+      }
       debugPrint('[live] send -> ${p.latitude}, ${p.longitude}');
       _live?.sendLocation(lat: p.latitude, lng: p.longitude);
-      notifyListeners();
     });
   }
 
