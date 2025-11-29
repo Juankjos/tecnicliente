@@ -10,10 +10,6 @@ Aplicación móvil desarrollada en **Flutter** para que los técnicos de campo c
 - Actualización de estatus del servicio (por ejemplo: pendiente, en curso, realizado, cancelado).
 - Integración con un backend en PHP que expone los servicios necesarios para la app.
 
-> **Nota:** Ajusta esta lista según lo que realmente haga tu app (puedes agregar más puntos como geolocalización, firmas del cliente, fotos, etc. si aplica).
-
----
-
 ## Tecnologías
 
 - **Flutter** (Dart)
